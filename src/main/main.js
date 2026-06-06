@@ -1,5 +1,5 @@
 const path = require('node:path');
-const { app, BrowserWindow, dialog, ipcMain } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
 const config = require('../config/default');
 const { createDatabase } = require('../modules/db');
 const { createStorageManager } = require('../modules/storageManager');
@@ -63,6 +63,12 @@ function registerIpc() {
       properties: ['openDirectory']
     });
     return result.canceled ? null : result.filePaths[0];
+  });
+
+  ipcMain.handle('app:openPath', async (_event, targetPath) => {
+    if (!targetPath) return { opened: false };
+    const errorMessage = await shell.openPath(targetPath);
+    return { opened: !errorMessage, errorMessage };
   });
 
   ipcMain.handle('storage:add', (_event, payload) => {
@@ -146,6 +152,20 @@ function registerIpc() {
   ipcMain.handle('sync:reportTaskStatus', async (_event, payload) => {
     const sync = createTaskSync(payload);
     return sync.reportTaskStatus(payload.taskId, payload.status, payload.detail);
+  });
+
+  ipcMain.handle('sync:uploadThumbnails', async (_event, payload) => {
+    const sync = createTaskSync(payload);
+    const files = fileScanner.getAllFiles(payload.storageId).filter((file) => file.thumbnailPath);
+    const results = [];
+    for (const file of files) {
+      results.push(await sync.uploadThumbnail(file.id, {
+        storageId: payload.storageId,
+        relativePath: file.relativePath,
+        thumbnailPath: file.thumbnailPath
+      }));
+    }
+    return { count: results.length, results };
   });
 }
 

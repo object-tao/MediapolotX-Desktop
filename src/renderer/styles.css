@@ -349,7 +349,7 @@ select {
 
 .taskItem {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 1fr auto auto;
   gap: 12px;
   align-items: center;
   border: 1px solid #e4e9f0;
@@ -390,6 +390,11 @@ select {
 .taskItem em.pending {
   background: #eef2f7;
   color: #536173;
+}
+
+.taskItem button {
+  padding: 6px 10px;
+  font-size: 12px;
 }
 
 .empty {

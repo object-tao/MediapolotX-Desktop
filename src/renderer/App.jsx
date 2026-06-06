@@ -214,6 +214,26 @@ function App() {
     }
   }
 
+  async function uploadThumbnails() {
+    if (!selectedStorage) return;
+    setBusy(true);
+    setMessage('正在上传已生成缩略图...');
+    try {
+      await window.mediapolotx.settings.set({ key: 'syncOptions', value: syncOptions });
+      const result = await window.mediapolotx.sync.uploadThumbnails({ ...syncOptions, storageId: selectedStorage.id });
+      setMessage(`缩略图上传完成：${result.count} 个`);
+    } catch (error) {
+      setMessage(`缩略图上传失败：${error.message}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function openPath(targetPath) {
+    const result = await window.mediapolotx.openPath(targetPath);
+    if (!result.opened) setMessage(result.errorMessage || '无法打开路径');
+  }
+
   async function runTask(taskRunner) {
     setBusy(true);
     setMessage('任务执行中...');
@@ -437,9 +457,10 @@ function App() {
                 </label>
                 <button onClick={fetchWebQueue} disabled={busy}>获取任务队列</button>
                 <button onClick={uploadCurrentIndex} disabled={busy || !selectedStorage}>上传当前索引</button>
+                <button onClick={uploadThumbnails} disabled={busy || !selectedStorage}>上传缩略图</button>
               </div>
             </div>
-            <TaskList tasks={tasks} />
+            <TaskList tasks={tasks} onOpenPath={openPath} />
           </section>
         )}
 
@@ -452,7 +473,7 @@ function App() {
           onClear={clearSelection}
         />
 
-        {activeView !== 'sync' && <TaskList tasks={tasks} compact />}
+        {activeView !== 'sync' && <TaskList tasks={tasks} compact onOpenPath={openPath} />}
         {message && <div className="toast">{message}</div>}
       </main>
     </div>
@@ -545,7 +566,7 @@ function FileTable({ files, selectedFileIds, selectedStorage, onToggle, onSelect
   );
 }
 
-function TaskList({ tasks, compact = false }) {
+function TaskList({ tasks, compact = false, onOpenPath }) {
   return (
     <section className={`panel taskPanel ${compact ? 'compact' : ''}`}>
       <div className="panelHeader">
@@ -560,6 +581,9 @@ function TaskList({ tasks, compact = false }) {
               <small>{task.errorMessage || task.result?.outputDir || task.updatedAt}</small>
             </span>
             <em className={task.status}>{task.status}</em>
+            {task.result?.outputDir && (
+              <button type="button" onClick={() => onOpenPath(task.result.outputDir)}>打开</button>
+            )}
           </div>
         ))}
         {tasks.length === 0 && <div className="empty">暂无任务</div>}

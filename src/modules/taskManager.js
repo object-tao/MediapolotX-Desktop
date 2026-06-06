@@ -53,8 +53,9 @@ function createTaskManager(db, logger, fileRepository = null) {
         fileRepository?.markFileStatus(file.id, 'processing');
         const baseName = path.basename(file.absolutePath, path.extname(file.absolutePath));
         const outputPath = path.join(outputDir, `${baseName}.cover.jpg`);
-        results.push(await videoProcessor.createVideoCover(file.absolutePath, outputPath, options));
-        fileRepository?.markFileStatus(file.id, 'cover_ready');
+        const result = await videoProcessor.createVideoCover(file.absolutePath, outputPath, options);
+        fileRepository?.setFileThumbnail(file.id, result.outputPath, 'cover_ready');
+        results.push({ fileId: file.id, ...result });
       }
 
       return { count: results.length, outputDir, files: results };

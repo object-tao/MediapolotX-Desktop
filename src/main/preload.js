@@ -2,6 +2,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('mediapolotx', {
   getStatus: () => ipcRenderer.invoke('app:getStatus'),
+  openPath: (targetPath) => ipcRenderer.invoke('app:openPath', targetPath),
   selectDirectory: () => ipcRenderer.invoke('dialog:selectDirectory'),
   storage: {
     add: (payload) => ipcRenderer.invoke('storage:add', payload),
@@ -34,6 +35,7 @@ contextBridge.exposeInMainWorld('mediapolotx', {
   sync: {
     fetchQueue: (payload) => ipcRenderer.invoke('sync:fetchQueue', payload),
     uploadIndex: (payload) => ipcRenderer.invoke('sync:uploadIndex', payload),
+    uploadThumbnails: (payload) => ipcRenderer.invoke('sync:uploadThumbnails', payload),
     reportTaskStatus: (payload) => ipcRenderer.invoke('sync:reportTaskStatus', payload)
   }
 });
