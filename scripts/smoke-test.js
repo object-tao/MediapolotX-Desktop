@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 
 const { createDatabase } = require('../src/modules/db');
+const { createFileScanner } = require('../src/modules/fileScanner');
 const { createStorageManager } = require('../src/modules/storageManager');
 const { createSettingsManager } = require('../src/modules/settingsManager');
 const { createTaskManager } = require('../src/modules/taskManager');
@@ -14,6 +15,7 @@ const dbPath = path.join(tempRoot, 'smoke.sqlite');
 try {
   const db = await createDatabase(dbPath);
   const storageManager = createStorageManager(db);
+  const fileScanner = createFileScanner(db);
   const settingsManager = createSettingsManager(db);
   const taskManager = createTaskManager(db);
   const storage = storageManager.addStorage('Smoke Library', 'local', tempRoot);
@@ -21,6 +23,16 @@ try {
 
   if (!storage.id || list.length !== 1) {
     throw new Error('Storage smoke test failed.');
+  }
+
+  const imagePath = path.join(tempRoot, 'sample.jpg');
+  fs.writeFileSync(imagePath, 'not-a-real-image');
+  const stats = fs.statSync(imagePath);
+  await fileScanner.scanStorage(storage);
+  await fileScanner.scanStorage(storage);
+  const files = fileScanner.getAllFiles(storage.id);
+  if (files.length !== 1 || files[0].sizeBytes !== stats.size) {
+    throw new Error('File scanner smoke test failed.');
   }
 
   settingsManager.set('syncOptions', { baseUrl: 'http://localhost/api' });

@@ -23,6 +23,7 @@ function createFileScanner(db, logger) {
       updated_at = excluded.updated_at
   `);
   const removeFile = db.prepare('DELETE FROM files WHERE storage_id = ? AND relative_path = ?');
+  const getFileByPath = db.prepare('SELECT * FROM files WHERE storage_id = ? AND relative_path = ?');
   const listFiles = db.prepare('SELECT * FROM files WHERE storage_id = ? ORDER BY updated_at DESC LIMIT ?');
   const listAllFiles = db.prepare('SELECT * FROM files WHERE storage_id = ? ORDER BY relative_path ASC');
   const updateFileStatus = db.prepare(`
@@ -53,10 +54,12 @@ function createFileScanner(db, logger) {
     if (!fileType) return null;
 
     const timestamp = nowIso();
+    const relativePath = normalizeRelativePath(path.relative(storage.basePath, absolutePath));
+    const existing = getFileByPath.get(storage.id, relativePath);
     const record = {
-      id: randomUUID(),
+      id: existing?.id || randomUUID(),
       storageId: storage.id,
-      relativePath: normalizeRelativePath(path.relative(storage.basePath, absolutePath)),
+      relativePath,
       absolutePath,
       fileType,
       sizeBytes: stats.size,
