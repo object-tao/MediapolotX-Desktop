@@ -275,6 +275,10 @@ function App() {
           <button className={`navItem ${activeView === 'image' ? 'active' : ''}`} onClick={() => setActiveView('image')}>图片处理</button>
           <button className={`navItem ${activeView === 'video' ? 'active' : ''}`} onClick={() => setActiveView('video')}>视频封面</button>
           <button className={`navItem ${activeView === 'sync' ? 'active' : ''}`} onClick={() => setActiveView('sync')}>任务同步</button>
+          <div className="navGroup">
+            <div className="navGroupTitle">工具集</div>
+            <button className={`navItem subItem ${activeView === 'removeAiMark' ? 'active' : ''}`} onClick={() => setActiveView('removeAiMark')}>去AI标识</button>
+          </div>
         </nav>
         <div className="runtime">
           <span>版本 {appStatus?.version || '-'}</span>
@@ -464,6 +468,22 @@ function App() {
           </section>
         )}
 
+        {activeView === 'removeAiMark' && (
+          <section className="contentGrid">
+            <div className="panel">
+              <h2>去AI标识</h2>
+              <div className="toolIntro">
+                <p>用于处理图片中的 AI 生成标识、水印或平台痕迹。当前已接入菜单入口，后续会在这里加入检测、预览、批量处理和结果导出。</p>
+              </div>
+              <div className="form">
+                <button disabled>选择图片区域</button>
+                <button disabled>批量去除</button>
+              </div>
+            </div>
+            <SelectionSummary selectedImages={selectedImages} selectedVideos={selectedVideos} />
+          </section>
+        )}
+
         <FileTable
           files={files}
           selectedFileIds={selectedFileIds}
@@ -596,6 +616,7 @@ function viewTitle(activeView) {
   if (activeView === 'image') return '图片批量处理';
   if (activeView === 'video') return '视频封面处理';
   if (activeView === 'sync') return 'Web 协同';
+  if (activeView === 'removeAiMark') return '去AI标识';
   return '本地素材库';
 }
 
@@ -603,6 +624,7 @@ function viewSubtitle(activeView) {
   if (activeView === 'image') return '对选中的图片执行尺寸调整、压缩、EXIF 清理和模板渲染。';
   if (activeView === 'video') return '从选中的视频中截取封面，并生成横竖屏适配结果。';
   if (activeView === 'sync') return '连接 MediapolotX Web，获取任务队列并回传处理状态。';
+  if (activeView === 'removeAiMark') return '工具集能力：面向图片中的 AI 标识、水印和平台痕迹处理。';
   return '管理本机目录、移动硬盘和 NAS，建立本地 SQLite 索引。';
 }
 

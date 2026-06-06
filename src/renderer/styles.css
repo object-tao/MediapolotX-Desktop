@@ -80,6 +80,24 @@ nav {
   color: #ffffff;
 }
 
+.navGroup {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.navGroupTitle {
+  color: #8fa0b4;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 8px 12px 2px;
+}
+
+.navItem.subItem {
+  padding-left: 28px;
+  font-size: 14px;
+}
+
 .runtime {
   margin-top: auto;
   display: grid;
@@ -316,6 +334,12 @@ select {
   margin: 12px 0 0;
   color: #667386;
   line-height: 1.5;
+}
+
+.toolIntro {
+  color: #536173;
+  line-height: 1.6;
+  margin-bottom: 16px;
 }
 
 .metrics {
