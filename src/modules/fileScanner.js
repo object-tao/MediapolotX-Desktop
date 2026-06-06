@@ -24,6 +24,17 @@ function createFileScanner(db, logger) {
   `);
   const removeFile = db.prepare('DELETE FROM files WHERE storage_id = ? AND relative_path = ?');
   const listFiles = db.prepare('SELECT * FROM files WHERE storage_id = ? ORDER BY updated_at DESC LIMIT ?');
+  const listAllFiles = db.prepare('SELECT * FROM files WHERE storage_id = ? ORDER BY relative_path ASC');
+  const updateFileStatus = db.prepare(`
+    UPDATE files
+    SET processing_status = @status, updated_at = @updatedAt
+    WHERE id = @id
+  `);
+  const updateThumbnailPath = db.prepare(`
+    UPDATE files
+    SET thumbnail_path = @thumbnailPath, processing_status = @status, updated_at = @updatedAt
+    WHERE id = @id
+  `);
 
   async function scanStorage(storage) {
     const results = [];
@@ -97,10 +108,25 @@ function createFileScanner(db, logger) {
     return listFiles.all(storageId, limit).map(mapFile);
   }
 
+  function getAllFiles(storageId) {
+    return listAllFiles.all(storageId).map(mapFile);
+  }
+
+  function markFileStatus(fileId, status) {
+    updateFileStatus.run({ id: fileId, status, updatedAt: nowIso() });
+  }
+
+  function setFileThumbnail(fileId, thumbnailPath, status = 'thumbnail_ready') {
+    updateThumbnailPath.run({ id: fileId, thumbnailPath, status, updatedAt: nowIso() });
+  }
+
   return {
     scanStorage,
     watchStorage,
-    getRecentFiles
+    getRecentFiles,
+    getAllFiles,
+    markFileStatus,
+    setFileThumbnail
   };
 }
 

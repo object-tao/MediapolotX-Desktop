@@ -19,6 +19,26 @@ npm install
 npm run dev
 ```
 
+## MVP Features
+
+- Storage libraries: local folders, removable drives, and mounted NAS paths.
+- File indexing: image/video scan, watcher updates, SQLite-backed file status.
+- Image processing: resize, compress, clean EXIF, template render, thumbnail generation.
+- Video processing: frame capture and cover adaptation with crop or blurred background.
+- Web sync: fetch remote task queue, store remote tasks locally, upload current storage index.
+- Local settings: remembers image, video, and Web sync options in SQLite.
+
+## Web API Contract
+
+The initial desktop client expects the Web service to expose these endpoints under the configured API base URL:
+
+- `GET /desktop/tasks`
+- `POST /desktop/indexes`
+- `POST /desktop/files/:fileId/thumbnail`
+- `PATCH /desktop/tasks/:taskId`
+
+The response shape for task queue can be an array, `{ "tasks": [...] }`, or `{ "data": [...] }`.
+
 ## Build
 
 ```powershell

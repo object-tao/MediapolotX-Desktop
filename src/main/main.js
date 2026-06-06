@@ -6,6 +6,7 @@ const { createStorageManager } = require('../modules/storageManager');
 const { createFileScanner } = require('../modules/fileScanner');
 const { createTaskManager } = require('../modules/taskManager');
 const { createTaskSync } = require('../modules/taskSync');
+const { createSettingsManager } = require('../modules/settingsManager');
 const { createLogger } = require('../utils/logger');
 
 let mainWindow;
@@ -13,6 +14,7 @@ let db;
 let storageManager;
 let fileScanner;
 let taskManager;
+let settingsManager;
 let logger;
 const watchers = new Map();
 
@@ -45,7 +47,8 @@ async function bootstrapServices() {
   db = await createDatabase(path.join(userData, 'mediapolotx.sqlite'));
   storageManager = createStorageManager(db);
   fileScanner = createFileScanner(db, logger);
-  taskManager = createTaskManager(db, logger);
+  taskManager = createTaskManager(db, logger, fileScanner);
+  settingsManager = createSettingsManager(db);
 }
 
 function registerIpc() {
@@ -79,6 +82,10 @@ function registerIpc() {
 
   ipcMain.handle('scanner:listFiles', (_event, payload) => (
     fileScanner.getRecentFiles(payload.storageId, payload.limit)
+  ));
+
+  ipcMain.handle('scanner:listAllFiles', (_event, payload) => (
+    fileScanner.getAllFiles(payload.storageId)
   ));
 
   ipcMain.handle('scanner:watchStorage', (_event, storage) => {
@@ -115,9 +122,25 @@ function registerIpc() {
     taskManager.generateImageThumbnails(payload.files, payload.outputDir, payload.options)
   ));
 
+  ipcMain.handle('settings:getAll', () => settingsManager.all());
+
+  ipcMain.handle('settings:set', (_event, payload) => settingsManager.set(payload.key, payload.value));
+
   ipcMain.handle('sync:fetchQueue', async (_event, payload = {}) => {
     const sync = createTaskSync(payload);
-    return sync.fetchTaskQueue(payload.params);
+    const queue = await sync.fetchTaskQueue(payload.params);
+    const stored = taskManager.storeRemoteTasks(queue);
+    return { queue, stored };
+  });
+
+  ipcMain.handle('sync:uploadIndex', async (_event, payload) => {
+    const sync = createTaskSync(payload);
+    const files = fileScanner.getAllFiles(payload.storageId);
+    return sync.uploadIndex({
+      storageId: payload.storageId,
+      generatedAt: new Date().toISOString(),
+      files
+    });
   });
 
   ipcMain.handle('sync:reportTaskStatus', async (_event, payload) => {

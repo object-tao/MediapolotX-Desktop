@@ -77,6 +77,11 @@ function App() {
 
   useEffect(() => {
     window.mediapolotx.getStatus().then(setAppStatus);
+    window.mediapolotx.settings.getAll().then((settings) => {
+      if (settings.syncOptions) setSyncOptions(settings.syncOptions);
+      if (settings.imageOptions) setImageOptions((current) => ({ ...current, ...settings.imageOptions }));
+      if (settings.videoOptions) setVideoOptions((current) => ({ ...current, ...settings.videoOptions }));
+    });
     refreshStorages();
     refreshTasks();
 
@@ -139,6 +144,7 @@ function App() {
 
   async function runImageBatch() {
     if (selectedImages.length === 0 || !imageOptions.outputDir) return;
+    await window.mediapolotx.settings.set({ key: 'imageOptions', value: imageOptions });
     await runTask(() => window.mediapolotx.tasks.imageBatch({
       files: selectedImages,
       options: {
@@ -157,6 +163,7 @@ function App() {
 
   async function runVideoCoverBatch() {
     if (selectedVideos.length === 0 || !videoOptions.outputDir) return;
+    await window.mediapolotx.settings.set({ key: 'videoOptions', value: videoOptions });
     await runTask(() => window.mediapolotx.tasks.videoCoverBatch({
       files: selectedVideos,
       options: {
@@ -169,6 +176,7 @@ function App() {
 
   async function runThumbnailBatch() {
     if (selectedImages.length === 0 || !imageOptions.outputDir) return;
+    await window.mediapolotx.settings.set({ key: 'imageOptions', value: imageOptions });
     await runTask(() => window.mediapolotx.tasks.thumbnailBatch({
       files: selectedImages,
       outputDir: imageOptions.outputDir,
@@ -180,10 +188,27 @@ function App() {
     setBusy(true);
     setMessage('正在获取 Web 任务队列...');
     try {
+      await window.mediapolotx.settings.set({ key: 'syncOptions', value: syncOptions });
       const result = await window.mediapolotx.sync.fetchQueue(syncOptions);
-      setMessage(`Web 队列获取成功：${Array.isArray(result) ? result.length : 1} 条`);
+      await refreshTasks();
+      setMessage(`Web 队列获取成功：收到 ${result.stored.received} 条，新增 ${result.stored.inserted} 条`);
     } catch (error) {
       setMessage(`同步失败：${error.message}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function uploadCurrentIndex() {
+    if (!selectedStorage) return;
+    setBusy(true);
+    setMessage('正在上传当前素材索引...');
+    try {
+      await window.mediapolotx.settings.set({ key: 'syncOptions', value: syncOptions });
+      await window.mediapolotx.sync.uploadIndex({ ...syncOptions, storageId: selectedStorage.id });
+      setMessage('当前素材索引已上传');
+    } catch (error) {
+      setMessage(`索引上传失败：${error.message}`);
     } finally {
       setBusy(false);
     }
@@ -195,6 +220,7 @@ function App() {
     try {
       const task = await taskRunner();
       await refreshTasks();
+      if (selectedStorage) await loadFiles(selectedStorage.id);
       setMessage(task.status === 'completed' ? `任务完成：${task.result.count} 个文件` : `任务失败：${task.errorMessage}`);
     } catch (error) {
       setMessage(error.message);
@@ -410,6 +436,7 @@ function App() {
                   <input type="password" value={syncOptions.token} onChange={(event) => setSyncOptions({ ...syncOptions, token: event.target.value })} />
                 </label>
                 <button onClick={fetchWebQueue} disabled={busy}>获取任务队列</button>
+                <button onClick={uploadCurrentIndex} disabled={busy || !selectedStorage}>上传当前索引</button>
               </div>
             </div>
             <TaskList tasks={tasks} />

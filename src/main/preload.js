@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('mediapolotx', {
   scanner: {
     scanStorage: (storage) => ipcRenderer.invoke('scanner:scanStorage', storage),
     listFiles: (payload) => ipcRenderer.invoke('scanner:listFiles', payload),
+    listAllFiles: (payload) => ipcRenderer.invoke('scanner:listAllFiles', payload),
     watchStorage: (storage) => ipcRenderer.invoke('scanner:watchStorage', storage),
     unwatchStorage: (storageId) => ipcRenderer.invoke('scanner:unwatchStorage', storageId),
     onEvent: (callback) => {
@@ -26,8 +27,13 @@ contextBridge.exposeInMainWorld('mediapolotx', {
     videoCoverBatch: (payload) => ipcRenderer.invoke('tasks:videoCoverBatch', payload),
     thumbnailBatch: (payload) => ipcRenderer.invoke('tasks:thumbnailBatch', payload)
   },
+  settings: {
+    getAll: () => ipcRenderer.invoke('settings:getAll'),
+    set: (payload) => ipcRenderer.invoke('settings:set', payload)
+  },
   sync: {
     fetchQueue: (payload) => ipcRenderer.invoke('sync:fetchQueue', payload),
+    uploadIndex: (payload) => ipcRenderer.invoke('sync:uploadIndex', payload),
     reportTaskStatus: (payload) => ipcRenderer.invoke('sync:reportTaskStatus', payload)
   }
 });
