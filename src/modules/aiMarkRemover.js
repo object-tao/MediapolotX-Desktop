@@ -39,14 +39,29 @@ async function scanFolder(folderPath, options = {}) {
   return files.sort((a, b) => a.relativePath.localeCompare(b.relativePath));
 }
 
-async function processFolder(folderPath, options = {}) {
+async function processFolder(folderPath, options = {}, onProgress = null) {
   const outputDir = options.outputDir || path.join(folderPath, '_mediapolotx_no_ai');
   const files = options.files?.length ? options.files : await scanFolder(folderPath, options);
   const selectedPaths = new Set(options.selectedPaths || files.map((file) => file.absolutePath));
+  const selectedFiles = files.filter((file) => selectedPaths.has(file.absolutePath));
   const results = [];
 
-  for (const file of files) {
-    if (!selectedPaths.has(file.absolutePath)) continue;
+  onProgress?.({
+    phase: 'start',
+    total: selectedFiles.length,
+    completed: 0,
+    percent: 0
+  });
+
+  for (const file of selectedFiles) {
+    const currentIndex = results.length + 1;
+    onProgress?.({
+      phase: 'processing',
+      total: selectedFiles.length,
+      completed: results.length,
+      percent: selectedFiles.length ? Math.round((results.length / selectedFiles.length) * 100) : 0,
+      currentFile: file.relativePath
+    });
 
     const relativeOutputPath = file.relativePath.replace(/\.(jpeg|jpg|png)$/i, (match) => {
       const ext = match.toLowerCase() === '.jpeg' ? '.jpg' : match.toLowerCase();
@@ -63,7 +78,22 @@ async function processFolder(folderPath, options = {}) {
       removedAiMarkers: detection.hasAiMarkers,
       markers: detection.markers
     });
+
+    onProgress?.({
+      phase: 'processing',
+      total: selectedFiles.length,
+      completed: currentIndex,
+      percent: selectedFiles.length ? Math.round((currentIndex / selectedFiles.length) * 100) : 100,
+      currentFile: file.relativePath
+    });
   }
+
+  onProgress?.({
+    phase: 'completed',
+    total: selectedFiles.length,
+    completed: selectedFiles.length,
+    percent: 100
+  });
 
   return {
     count: results.length,

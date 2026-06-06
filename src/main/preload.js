@@ -30,7 +30,12 @@ contextBridge.exposeInMainWorld('mediapolotx', {
   },
   tools: {
     scanAiMarks: (payload) => ipcRenderer.invoke('tools:scanAiMarks', payload),
-    removeAiMarks: (payload) => ipcRenderer.invoke('tools:removeAiMarks', payload)
+    removeAiMarks: (payload) => ipcRenderer.invoke('tools:removeAiMarks', payload),
+    onAiMarkProgress: (callback) => {
+      const listener = (_event, payload) => callback(payload);
+      ipcRenderer.on('tools:aiMarkProgress', listener);
+      return () => ipcRenderer.removeListener('tools:aiMarkProgress', listener);
+    }
   },
   settings: {
     getAll: () => ipcRenderer.invoke('settings:getAll'),

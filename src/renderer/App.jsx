@@ -54,6 +54,7 @@ function App() {
     jpegQuality: 95
   });
   const [aiToolFiles, setAiToolFiles] = useState([]);
+  const [aiToolProgress, setAiToolProgress] = useState(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -108,7 +109,13 @@ function App() {
         loadFiles(event.storageId);
       }
     });
-    return off;
+    const offAiProgress = window.mediapolotx.tools.onAiMarkProgress((progress) => {
+      setAiToolProgress(progress);
+    });
+    return () => {
+      off();
+      offAiProgress();
+    };
   }, [loadFiles, refreshStorages, refreshTasks, selectedStorageId]);
 
   async function selectDirectory(setter) {
@@ -273,6 +280,7 @@ function App() {
   async function processAiToolFiles() {
     if (!aiToolOptions.folderPath || aiToolOptions.selectedPaths.length === 0) return;
     setBusy(true);
+    setAiToolProgress({ phase: 'start', total: aiToolOptions.selectedPaths.length, completed: 0, percent: 0 });
     setMessage('正在去除 AI 标识并处理图片...');
     try {
       await window.mediapolotx.settings.set({ key: 'aiToolOptions', value: aiToolOptions });
@@ -290,6 +298,7 @@ function App() {
           }
         }
       });
+      setAiToolProgress({ phase: 'completed', total: result.count, completed: result.count, percent: 100 });
       setMessage(`处理完成：${result.count} 个文件`);
       await openPath(result.outputDir);
     } catch (error) {
@@ -606,6 +615,13 @@ function App() {
                 <button onClick={processAiToolFiles} disabled={busy || aiToolOptions.selectedPaths.length === 0}>
                   处理 {aiToolOptions.selectedPaths.length} 个文件
                 </button>
+                {aiToolProgress && (
+                  <ProgressBar
+                    progress={aiToolProgress.percent}
+                    label={`${aiToolProgress.completed || 0}/${aiToolProgress.total || 0}`}
+                    detail={aiToolProgress.currentFile || (aiToolProgress.phase === 'completed' ? '处理完成' : '准备处理')}
+                  />
+                )}
               </div>
             </div>
             <AiToolFileList
@@ -772,6 +788,23 @@ function AiToolFileList({ files, selectedPaths, onToggle, onSelectAll, onClear }
         ))}
         {files.length === 0 && <div className="empty">请选择文件夹并扫描</div>}
       </div>
+    </div>
+  );
+}
+
+function ProgressBar({ progress, label, detail }) {
+  const safeProgress = Math.max(0, Math.min(100, Number(progress) || 0));
+
+  return (
+    <div className="progressBox">
+      <div className="progressMeta">
+        <span>{label}</span>
+        <strong>{safeProgress}%</strong>
+      </div>
+      <div className="progressTrack">
+        <div className="progressFill" style={{ width: `${safeProgress}%` }} />
+      </div>
+      <small title={detail}>{detail}</small>
     </div>
   );
 }

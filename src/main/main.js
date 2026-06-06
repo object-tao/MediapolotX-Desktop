@@ -134,7 +134,9 @@ function registerIpc() {
   ));
 
   ipcMain.handle('tools:removeAiMarks', async (_event, payload) => (
-    aiMarkRemover.processFolder(payload.folderPath, payload.options)
+    aiMarkRemover.processFolder(payload.folderPath, payload.options, (progress) => {
+      mainWindow?.webContents.send('tools:aiMarkProgress', progress);
+    })
   ));
 
   ipcMain.handle('settings:getAll', () => settingsManager.all());

@@ -429,6 +429,48 @@ select {
   color: #176642;
 }
 
+.progressBox {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #e4e9f0;
+  border-radius: 8px;
+  padding: 12px;
+  background: #ffffff;
+}
+
+.progressMeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #536173;
+  font-size: 13px;
+}
+
+.progressMeta strong {
+  color: #18212f;
+}
+
+.progressTrack {
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e9edf3;
+}
+
+.progressFill {
+  height: 100%;
+  border-radius: inherit;
+  background: #2b7a78;
+  transition: width 160ms ease;
+}
+
+.progressBox small {
+  color: #667386;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .metrics {
   display: grid;
   grid-template-columns: 1fr 1fr;
