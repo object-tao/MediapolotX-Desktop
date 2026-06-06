@@ -31,10 +31,17 @@ contextBridge.exposeInMainWorld('mediapolotx', {
   tools: {
     scanAiMarks: (payload) => ipcRenderer.invoke('tools:scanAiMarks', payload),
     removeAiMarks: (payload) => ipcRenderer.invoke('tools:removeAiMarks', payload),
+    scanImageDuplicate: (payload) => ipcRenderer.invoke('tools:scanImageDuplicate', payload),
+    duplicateImages: (payload) => ipcRenderer.invoke('tools:duplicateImages', payload),
     onAiMarkProgress: (callback) => {
       const listener = (_event, payload) => callback(payload);
       ipcRenderer.on('tools:aiMarkProgress', listener);
       return () => ipcRenderer.removeListener('tools:aiMarkProgress', listener);
+    },
+    onImageDuplicateProgress: (callback) => {
+      const listener = (_event, payload) => callback(payload);
+      ipcRenderer.on('tools:imageDuplicateProgress', listener);
+      return () => ipcRenderer.removeListener('tools:imageDuplicateProgress', listener);
     }
   },
   settings: {

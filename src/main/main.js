@@ -8,6 +8,7 @@ const { createTaskManager } = require('../modules/taskManager');
 const { createTaskSync } = require('../modules/taskSync');
 const { createSettingsManager } = require('../modules/settingsManager');
 const aiMarkRemover = require('../modules/aiMarkRemover');
+const imageDuplicator = require('../modules/imageDuplicator');
 const { createLogger } = require('../utils/logger');
 
 let mainWindow;
@@ -136,6 +137,16 @@ function registerIpc() {
   ipcMain.handle('tools:removeAiMarks', async (_event, payload) => (
     aiMarkRemover.processFolder(payload.folderPath, payload.options, (progress) => {
       mainWindow?.webContents.send('tools:aiMarkProgress', progress);
+    })
+  ));
+
+  ipcMain.handle('tools:scanImageDuplicate', async (_event, payload) => (
+    imageDuplicator.scanFolder(payload.folderPath)
+  ));
+
+  ipcMain.handle('tools:duplicateImages', async (_event, payload) => (
+    imageDuplicator.duplicateImages(payload.folderPath, payload.options, (progress) => {
+      mainWindow?.webContents.send('tools:imageDuplicateProgress', progress);
     })
   ));
 

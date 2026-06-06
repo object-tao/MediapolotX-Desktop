@@ -58,6 +58,22 @@ function App() {
   });
   const [aiToolFiles, setAiToolFiles] = useState([]);
   const [aiToolProgress, setAiToolProgress] = useState(null);
+  const [duplicateOptions, setDuplicateOptions] = useState({
+    folderPath: '',
+    qualities: '99,98',
+    sizes: '10x10,20x20',
+    brightnessValues: '0,0.001',
+    selectedPaths: [],
+    watermark: {
+      enabled: true,
+      text: 'qtddp',
+      color: 'rgb(80,80,80)',
+      opacity: 0.45,
+      fontSize: 54
+    }
+  });
+  const [duplicateFiles, setDuplicateFiles] = useState([]);
+  const [duplicateProgress, setDuplicateProgress] = useState(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -102,6 +118,7 @@ function App() {
       if (settings.imageOptions) setImageOptions((current) => ({ ...current, ...settings.imageOptions }));
       if (settings.videoOptions) setVideoOptions((current) => ({ ...current, ...settings.videoOptions }));
       if (settings.aiToolOptions) setAiToolOptions((current) => ({ ...current, ...settings.aiToolOptions }));
+      if (settings.duplicateOptions) setDuplicateOptions((current) => ({ ...current, ...settings.duplicateOptions }));
     });
     refreshStorages();
     refreshTasks();
@@ -115,9 +132,13 @@ function App() {
     const offAiProgress = window.mediapolotx.tools.onAiMarkProgress((progress) => {
       setAiToolProgress(progress);
     });
+    const offDuplicateProgress = window.mediapolotx.tools.onImageDuplicateProgress((progress) => {
+      setDuplicateProgress(progress);
+    });
     return () => {
       off();
       offAiProgress();
+      offDuplicateProgress();
     };
   }, [loadFiles, refreshStorages, refreshTasks, selectedStorageId]);
 
@@ -331,6 +352,65 @@ function App() {
     }));
   }
 
+  async function scanDuplicateFolder(nextOptions = duplicateOptions) {
+    if (!nextOptions.folderPath) return;
+    setBusy(true);
+    setMessage('正在扫描可复制图片...');
+    try {
+      await window.mediapolotx.settings.set({ key: 'duplicateOptions', value: nextOptions });
+      const list = await window.mediapolotx.tools.scanImageDuplicate({ folderPath: nextOptions.folderPath });
+      setDuplicateFiles(list);
+      setDuplicateOptions((current) => ({
+        ...current,
+        selectedPaths: list.map((file) => file.absolutePath)
+      }));
+      setMessage(`扫描完成：${list.length} 个文件`);
+    } catch (error) {
+      setMessage(`扫描失败：${error.message}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function runImageDuplicate() {
+    if (!duplicateOptions.folderPath || duplicateOptions.selectedPaths.length === 0) return;
+    setBusy(true);
+    setDuplicateProgress({ phase: 'start', total: 0, completed: 0, percent: 0 });
+    setMessage('正在生成图片副本...');
+    try {
+      await window.mediapolotx.settings.set({ key: 'duplicateOptions', value: duplicateOptions });
+      const result = await window.mediapolotx.tools.duplicateImages({
+        folderPath: duplicateOptions.folderPath,
+        options: {
+          ...duplicateOptions,
+          files: duplicateFiles,
+          selectedPaths: duplicateOptions.selectedPaths,
+          watermark: {
+            ...duplicateOptions.watermark,
+            opacity: Number(duplicateOptions.watermark.opacity),
+            fontSize: Number(duplicateOptions.watermark.fontSize)
+          }
+        }
+      });
+      setDuplicateProgress({ phase: 'completed', total: result.totalOutputs, completed: result.totalOutputs, percent: 100 });
+      setMessage(`生成完成：${result.totalCombinations} 套，共 ${result.totalOutputs} 张`);
+      await openPath(result.outputRoot);
+    } catch (error) {
+      setMessage(`生成失败：${error.message}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function toggleDuplicateFile(filePath) {
+    setDuplicateOptions((current) => ({
+      ...current,
+      selectedPaths: current.selectedPaths.includes(filePath)
+        ? current.selectedPaths.filter((item) => item !== filePath)
+        : [...current.selectedPaths, filePath]
+    }));
+  }
+
   async function openPath(targetPath) {
     const result = await window.mediapolotx.openPath(targetPath);
     if (!result.opened) setMessage(result.errorMessage || '无法打开路径');
@@ -380,6 +460,7 @@ function App() {
           <div className="navGroup">
             <div className="navGroupTitle">工具集</div>
             <button className={`navItem subItem ${activeView === 'removeAiMark' ? 'active' : ''}`} onClick={() => setActiveView('removeAiMark')}>去AI标识</button>
+            <button className={`navItem subItem ${activeView === 'imageDuplicate' ? 'active' : ''}`} onClick={() => setActiveView('imageDuplicate')}>图片复制</button>
           </div>
         </nav>
         <div className="runtime">
@@ -661,6 +742,82 @@ function App() {
           </section>
         )}
 
+        {activeView === 'imageDuplicate' && (
+          <section className="contentGrid">
+            <div className="panel">
+              <h2>图片复制</h2>
+              <div className="toolIntro">
+                <p>通过质量、尺寸、亮度和水印的参数组合，生成多套轻微不同的图片副本。输出目录为源目录下的参数命名目录，源文件不变。</p>
+              </div>
+              <div className="form">
+                <DirectoryPicker
+                  label="源目录"
+                  value={duplicateOptions.folderPath}
+                  onPick={(folderPath) => {
+                    const nextOptions = { ...duplicateOptions, folderPath };
+                    setDuplicateOptions(nextOptions);
+                    scanDuplicateFolder(nextOptions);
+                  }}
+                  selectDirectory={selectDirectory}
+                />
+                <button onClick={() => scanDuplicateFolder()} disabled={busy || !duplicateOptions.folderPath}>重新扫描</button>
+                <label>
+                  图片质量
+                  <input value={duplicateOptions.qualities} onChange={(event) => setDuplicateOptions({ ...duplicateOptions, qualities: event.target.value })} placeholder="99,98,97" />
+                </label>
+                <label>
+                  缩小尺寸
+                  <input value={duplicateOptions.sizes} onChange={(event) => setDuplicateOptions({ ...duplicateOptions, sizes: event.target.value })} placeholder="10x10,20x20" />
+                </label>
+                <label>
+                  亮度
+                  <input value={duplicateOptions.brightnessValues} onChange={(event) => setDuplicateOptions({ ...duplicateOptions, brightnessValues: event.target.value })} placeholder="0,0.001,-0.001" />
+                </label>
+                <DuplicateCombinationSummary options={duplicateOptions} fileCount={duplicateOptions.selectedPaths.length} />
+                <div className="watermarkBox">
+                  <label><input type="checkbox" checked={duplicateOptions.watermark.enabled} onChange={(event) => setDuplicateOptions({ ...duplicateOptions, watermark: { ...duplicateOptions.watermark, enabled: event.target.checked } })} /> 添加文字水印</label>
+                  <label>
+                    水印文字
+                    <input value={duplicateOptions.watermark.text} onChange={(event) => setDuplicateOptions({ ...duplicateOptions, watermark: { ...duplicateOptions.watermark, text: event.target.value } })} />
+                  </label>
+                  <div className="splitInputs">
+                    <label>
+                      颜色
+                      <input value={duplicateOptions.watermark.color} onChange={(event) => setDuplicateOptions({ ...duplicateOptions, watermark: { ...duplicateOptions.watermark, color: event.target.value } })} />
+                    </label>
+                    <label>
+                      字号
+                      <input type="number" min="8" max="200" value={duplicateOptions.watermark.fontSize} onChange={(event) => setDuplicateOptions({ ...duplicateOptions, watermark: { ...duplicateOptions.watermark, fontSize: event.target.value } })} />
+                    </label>
+                  </div>
+                  <label>
+                    透明度 {Math.round(Number(duplicateOptions.watermark.opacity) * 100)}%
+                    <input type="range" min="0.05" max="1" step="0.05" value={duplicateOptions.watermark.opacity} onChange={(event) => setDuplicateOptions({ ...duplicateOptions, watermark: { ...duplicateOptions.watermark, opacity: event.target.value } })} />
+                  </label>
+                </div>
+                <button onClick={runImageDuplicate} disabled={busy || duplicateOptions.selectedPaths.length === 0}>
+                  生成图片副本
+                </button>
+                {duplicateProgress && (
+                  <ProgressBar
+                    progress={duplicateProgress.percent}
+                    label={`${duplicateProgress.completed || 0}/${duplicateProgress.total || 0}`}
+                    detail={duplicateProgress.currentFile || (duplicateProgress.phase === 'completed' ? '生成完成' : '准备生成')}
+                  />
+                )}
+              </div>
+            </div>
+            <SimpleImageFileList
+              title="待复制图片"
+              files={duplicateFiles}
+              selectedPaths={duplicateOptions.selectedPaths}
+              onToggle={toggleDuplicateFile}
+              onSelectAll={() => setDuplicateOptions({ ...duplicateOptions, selectedPaths: duplicateFiles.map((file) => file.absolutePath) })}
+              onClear={() => setDuplicateOptions({ ...duplicateOptions, selectedPaths: [] })}
+            />
+          </section>
+        )}
+
         <FileTable
           files={files}
           selectedFileIds={selectedFileIds}
@@ -819,6 +976,50 @@ function AiToolFileList({ files, selectedPaths, onToggle, onSelectAll, onClear }
   );
 }
 
+function SimpleImageFileList({ title, files, selectedPaths, onToggle, onSelectAll, onClear }) {
+  return (
+    <div className="panel">
+      <div className="panelHeader">
+        <h2>{title}</h2>
+        <div className="tableActions">
+          <span>{files.length} 个文件，已选 {selectedPaths.length} 个</span>
+          <button onClick={onSelectAll} disabled={files.length === 0}>全选</button>
+          <button onClick={onClear} disabled={selectedPaths.length === 0}>清空</button>
+        </div>
+      </div>
+      <div className="aiFileList">
+        {files.map((file) => (
+          <button className="aiFileItem" key={file.absolutePath} onClick={() => onToggle(file.absolutePath)}>
+            <input type="checkbox" readOnly checked={selectedPaths.includes(file.absolutePath)} />
+            <span>
+              <strong>{file.relativePath}</strong>
+              <small>{formatBytes(file.sizeBytes)}</small>
+            </span>
+            <em className="clean">{file.extension.toUpperCase()}</em>
+          </button>
+        ))}
+        {files.length === 0 && <div className="empty">请选择目录并扫描</div>}
+      </div>
+    </div>
+  );
+}
+
+function DuplicateCombinationSummary({ options, fileCount }) {
+  const qualityCount = countCsvValues(options.qualities);
+  const sizeCount = countCsvValues(options.sizes);
+  const brightnessCount = countCsvValues(options.brightnessValues);
+  const combinations = qualityCount * sizeCount * brightnessCount;
+
+  return (
+    <div className="combinationSummary">
+      <span>质量 {qualityCount}</span>
+      <span>尺寸 {sizeCount}</span>
+      <span>亮度 {brightnessCount}</span>
+      <strong>{combinations} 套 / {combinations * fileCount} 张</strong>
+    </div>
+  );
+}
+
 function ProgressBar({ progress, label, detail }) {
   const safeProgress = Math.max(0, Math.min(100, Number(progress) || 0));
 
@@ -841,6 +1042,7 @@ function viewTitle(activeView) {
   if (activeView === 'video') return '视频封面处理';
   if (activeView === 'sync') return 'Web 协同';
   if (activeView === 'removeAiMark') return '去AI标识';
+  if (activeView === 'imageDuplicate') return '图片复制';
   return '本地素材库';
 }
 
@@ -849,6 +1051,7 @@ function viewSubtitle(activeView) {
   if (activeView === 'video') return '从选中的视频中截取封面，并生成横竖屏适配结果。';
   if (activeView === 'sync') return '连接 MediapolotX Web，获取任务队列并回传处理状态。';
   if (activeView === 'removeAiMark') return '工具集能力：面向图片中的 AI 标识、水印和平台痕迹处理。';
+  if (activeView === 'imageDuplicate') return '按参数组合批量生成多套轻微不同的图片副本。';
   return '管理本机目录、移动硬盘和 NAS，建立本地 SQLite 索引。';
 }
 
@@ -868,6 +1071,10 @@ function formatBytes(bytes) {
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
   const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
   return `${(bytes / 1024 ** index).toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
+}
+
+function countCsvValues(value) {
+  return String(value).split(',').map((item) => item.trim()).filter(Boolean).length;
 }
 
 export default App;

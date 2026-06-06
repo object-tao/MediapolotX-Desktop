@@ -8,6 +8,7 @@ const { createStorageManager } = require('../src/modules/storageManager');
 const { createSettingsManager } = require('../src/modules/settingsManager');
 const { createTaskManager } = require('../src/modules/taskManager');
 const aiMarkRemover = require('../src/modules/aiMarkRemover');
+const imageDuplicator = require('../src/modules/imageDuplicator');
 
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mediapolotx-smoke-'));
 const dbPath = path.join(tempRoot, 'smoke.sqlite');
@@ -86,6 +87,33 @@ try {
   ) {
     throw new Error('AI mark remover smoke test failed.');
   }
+
+  const duplicateRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mediapolotx-duplicate-'));
+  const duplicateImage = path.join(duplicateRoot, 'image.png');
+  fs.copyFileSync(pngPath, duplicateImage);
+  const duplicateFiles = await imageDuplicator.scanFolder(duplicateRoot);
+  const combinations = imageDuplicator.buildCombinations({
+    qualities: '99,98',
+    sizes: '1x1,2x2',
+    brightnessValues: '0,0.001'
+  });
+  const duplicateResult = await imageDuplicator.duplicateImages(duplicateRoot, {
+    files: duplicateFiles,
+    selectedPaths: duplicateFiles.map((file) => file.absolutePath),
+    qualities: '99,98',
+    sizes: '1x1,2x2',
+    brightnessValues: '0,0.001',
+    watermark: { enabled: true, text: 'qtddp', color: 'rgb(80,80,80)', opacity: 0.45, fontSize: 54 }
+  });
+  if (
+    combinations.length !== 8
+    || duplicateResult.totalCombinations !== 8
+    || duplicateResult.totalOutputs !== 8
+    || fs.readdirSync(duplicateRoot, { withFileTypes: true }).filter((entry) => entry.isDirectory()).length !== 8
+  ) {
+    throw new Error('Image duplicator smoke test failed.');
+  }
+  fs.rmSync(duplicateRoot, { recursive: true, force: true });
 
   db.close();
   console.log('Smoke test passed.');
