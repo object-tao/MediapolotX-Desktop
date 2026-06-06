@@ -56,12 +56,23 @@ function migrate(db) {
       remote_id TEXT,
       task_type TEXT NOT NULL,
       payload TEXT NOT NULL,
+      result TEXT,
       status TEXT NOT NULL DEFAULT 'pending',
       error_message TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
   `);
+
+  addColumnIfMissing(db, 'tasks', 'result', 'TEXT');
+}
+
+function addColumnIfMissing(db, tableName, columnName, columnDefinition) {
+  const columns = db.exec(`PRAGMA table_info(${tableName})`)[0]?.values || [];
+  const exists = columns.some((column) => column[1] === columnName);
+  if (!exists) {
+    db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${columnDefinition}`);
+  }
 }
 
 function createStatement(db, dbPath, sql) {

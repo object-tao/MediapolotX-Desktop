@@ -19,5 +19,15 @@ contextBridge.exposeInMainWorld('mediapolotx', {
       ipcRenderer.on('scanner:event', listener);
       return () => ipcRenderer.removeListener('scanner:event', listener);
     }
+  },
+  tasks: {
+    list: (payload) => ipcRenderer.invoke('tasks:list', payload),
+    imageBatch: (payload) => ipcRenderer.invoke('tasks:imageBatch', payload),
+    videoCoverBatch: (payload) => ipcRenderer.invoke('tasks:videoCoverBatch', payload),
+    thumbnailBatch: (payload) => ipcRenderer.invoke('tasks:thumbnailBatch', payload)
+  },
+  sync: {
+    fetchQueue: (payload) => ipcRenderer.invoke('sync:fetchQueue', payload),
+    reportTaskStatus: (payload) => ipcRenderer.invoke('sync:reportTaskStatus', payload)
   }
 });

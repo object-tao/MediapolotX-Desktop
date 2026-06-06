@@ -4,12 +4,15 @@ const config = require('../config/default');
 const { createDatabase } = require('../modules/db');
 const { createStorageManager } = require('../modules/storageManager');
 const { createFileScanner } = require('../modules/fileScanner');
+const { createTaskManager } = require('../modules/taskManager');
+const { createTaskSync } = require('../modules/taskSync');
 const { createLogger } = require('../utils/logger');
 
 let mainWindow;
 let db;
 let storageManager;
 let fileScanner;
+let taskManager;
 let logger;
 const watchers = new Map();
 
@@ -42,6 +45,7 @@ async function bootstrapServices() {
   db = await createDatabase(path.join(userData, 'mediapolotx.sqlite'));
   storageManager = createStorageManager(db);
   fileScanner = createFileScanner(db, logger);
+  taskManager = createTaskManager(db, logger);
 }
 
 function registerIpc() {
@@ -95,6 +99,30 @@ function registerIpc() {
     await watcher.close();
     watchers.delete(storageId);
     return { watching: false };
+  });
+
+  ipcMain.handle('tasks:list', (_event, payload = {}) => taskManager.getRecentTasks(payload.limit));
+
+  ipcMain.handle('tasks:imageBatch', async (_event, payload) => (
+    taskManager.runImageBatch(payload.files, payload.options)
+  ));
+
+  ipcMain.handle('tasks:videoCoverBatch', async (_event, payload) => (
+    taskManager.runVideoCoverBatch(payload.files, payload.options)
+  ));
+
+  ipcMain.handle('tasks:thumbnailBatch', async (_event, payload) => (
+    taskManager.generateImageThumbnails(payload.files, payload.outputDir, payload.options)
+  ));
+
+  ipcMain.handle('sync:fetchQueue', async (_event, payload = {}) => {
+    const sync = createTaskSync(payload);
+    return sync.fetchTaskQueue(payload.params);
+  });
+
+  ipcMain.handle('sync:reportTaskStatus', async (_event, payload) => {
+    const sync = createTaskSync(payload);
+    return sync.reportTaskStatus(payload.taskId, payload.status, payload.detail);
   });
 }
 
