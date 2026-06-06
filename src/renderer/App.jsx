@@ -271,7 +271,7 @@ function App() {
         ...current,
         selectedPaths: list.map((file) => file.absolutePath),
         outputDir: current.outputDir || `${nextOptions.folderPath}\\_mediapolotx_no_ai`,
-        backupDir: current.backupDir || `${nextOptions.folderPath}\\_mediapolotx_backup`
+        backupDir: current.backupDir || getSiblingBackupDir(nextOptions.folderPath)
       }));
       setMessage(`扫描完成：${list.length} 个文件`);
     } catch (error) {
@@ -576,7 +576,7 @@ function App() {
                       ...aiToolOptions,
                       folderPath,
                       outputDir: `${folderPath}\\_mediapolotx_no_ai`,
-                      backupDir: `${folderPath}\\_mediapolotx_backup`
+                      backupDir: getSiblingBackupDir(folderPath)
                     };
                     setAiToolOptions(nextOptions);
                     scanAiToolFolder(nextOptions);
@@ -844,6 +844,13 @@ function viewSubtitle(activeView) {
 
 function lastPathSegment(basePath) {
   return basePath.split(/[\\/]/).filter(Boolean).at(-1) || '素材库';
+}
+
+function getSiblingBackupDir(folderPath) {
+  const parts = folderPath.split(/[\\/]/).filter(Boolean);
+  const name = parts.at(-1) || 'backup';
+  const parent = folderPath.slice(0, Math.max(0, folderPath.length - name.length)).replace(/[\\/]$/, '');
+  return `${parent}\\${name}_mediapolotx_backup`;
 }
 
 function formatBytes(bytes) {

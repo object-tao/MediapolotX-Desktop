@@ -55,6 +55,13 @@ try {
     Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=', 'base64')
   );
   const aiFiles = await aiMarkRemover.scanFolder(tempRoot, { includeJpg: false, includePng: true });
+  const ignoredBackupDir = path.join(tempRoot, '_mediapolotx_backup');
+  fs.mkdirSync(ignoredBackupDir, { recursive: true });
+  fs.copyFileSync(pngPath, path.join(ignoredBackupDir, 'ignored.png'));
+  const aiFilesWithoutBackup = await aiMarkRemover.scanFolder(tempRoot, { includeJpg: false, includePng: true });
+  if (aiFilesWithoutBackup.length !== aiFiles.length) {
+    throw new Error('AI mark backup exclusion smoke test failed.');
+  }
   const aiResult = await aiMarkRemover.processFolder(tempRoot, {
     includeJpg: false,
     includePng: true,

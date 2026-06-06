@@ -3,6 +3,7 @@ const path = require('node:path');
 const sharp = require('sharp');
 
 const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png']);
+const IGNORED_DIRECTORY_NAMES = new Set(['_mediapolotx_backup', '_mediapolotx_no_ai']);
 const AI_SIGNATURES = [
   'c2pa',
   'content credentials',
@@ -21,6 +22,7 @@ async function scanFolder(folderPath, options = {}) {
   await walk(folderPath, async (filePath, stats) => {
     const ext = path.extname(filePath).toLowerCase();
     if (!IMAGE_EXTENSIONS.has(ext)) return;
+    if (path.basename(filePath).includes('.mediapolotx-tmp')) return;
     if ((ext === '.jpg' || ext === '.jpeg') && !includeJpg) return;
     if (ext === '.png' && !includePng) return;
 
@@ -43,7 +45,7 @@ async function processFolder(folderPath, options = {}, onProgress = null) {
   const outputDir = options.outputDir || path.join(folderPath, '_mediapolotx_no_ai');
   const replaceOriginal = options.replaceOriginal === true;
   const backupOriginal = options.backupOriginal !== false;
-  const backupDir = options.backupDir || path.join(folderPath, '_mediapolotx_backup');
+  const backupDir = options.backupDir || getDefaultBackupDir(folderPath);
   const files = options.files?.length ? options.files : await scanFolder(folderPath, options);
   const selectedPaths = new Set(options.selectedPaths || files.map((file) => file.absolutePath));
   const selectedFiles = files.filter((file) => selectedPaths.has(file.absolutePath));
@@ -177,6 +179,7 @@ async function walk(root, onFile) {
   for (const entry of entries) {
     const fullPath = path.join(root, entry.name);
     if (entry.isDirectory()) {
+      if (IGNORED_DIRECTORY_NAMES.has(entry.name.toLowerCase())) continue;
       await walk(fullPath, onFile);
     } else if (entry.isFile()) {
       await onFile(fullPath, await fs.stat(fullPath));
@@ -201,6 +204,10 @@ function createTempPath(filePath) {
   const ext = path.extname(filePath);
   const baseName = path.basename(filePath, ext);
   return path.join(dir, `${baseName}.mediapolotx-tmp${ext}`);
+}
+
+function getDefaultBackupDir(folderPath) {
+  return path.join(path.dirname(folderPath), `${path.basename(folderPath)}_mediapolotx_backup`);
 }
 
 module.exports = {
