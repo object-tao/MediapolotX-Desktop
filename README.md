@@ -19,6 +19,8 @@ npm install
 npm run dev
 ```
 
+Desktop development uses `127.0.0.1:5187` internally for the renderer hot-reload server, so it does not conflict with the MediapolotX Web dev server on `5173`.
+
 ## MVP Features
 
 - Storage libraries: local folders, removable drives, and mounted NAS paths.
