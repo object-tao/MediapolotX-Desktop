@@ -172,6 +172,17 @@ nav {
   gap: 12px;
 }
 
+.tripleInputs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+label small {
+  color: #667386;
+  line-height: 1.5;
+}
+
 label {
   display: grid;
   gap: 7px;

@@ -60,7 +60,9 @@ function App() {
   const [aiToolProgress, setAiToolProgress] = useState(null);
   const [duplicateOptions, setDuplicateOptions] = useState({
     folderPath: '',
-    qualities: '99,98',
+    qualityStart: 99,
+    qualityEnd: 70,
+    qualityStep: 1,
     sizes: '10x10,20x20',
     brightnessValues: '0,0.001',
     selectedPaths: [],
@@ -383,6 +385,7 @@ function App() {
         folderPath: duplicateOptions.folderPath,
         options: {
           ...duplicateOptions,
+          qualities: buildQualityRange(duplicateOptions),
           files: duplicateFiles,
           selectedPaths: duplicateOptions.selectedPaths,
           watermark: {
@@ -762,8 +765,13 @@ function App() {
                 />
                 <button onClick={() => scanDuplicateFolder()} disabled={busy || !duplicateOptions.folderPath}>重新扫描</button>
                 <label>
-                  图片质量
-                  <input value={duplicateOptions.qualities} onChange={(event) => setDuplicateOptions({ ...duplicateOptions, qualities: event.target.value })} placeholder="99,98,97" />
+                  图片质量范围
+                  <div className="tripleInputs">
+                    <input aria-label="起始质量" type="number" min="60" max="99" value={duplicateOptions.qualityStart} onChange={(event) => setDuplicateOptions({ ...duplicateOptions, qualityStart: event.target.value })} />
+                    <input aria-label="结束质量" type="number" min="60" max="99" value={duplicateOptions.qualityEnd} onChange={(event) => setDuplicateOptions({ ...duplicateOptions, qualityEnd: event.target.value })} />
+                    <input aria-label="步长" type="number" min="1" max="39" value={duplicateOptions.qualityStep} onChange={(event) => setDuplicateOptions({ ...duplicateOptions, qualityStep: event.target.value })} />
+                  </div>
+                  <small>起始 / 结束 / 步长，例如 99、70、1 会生成 99 到 70 共 30 个质量值。</small>
                 </label>
                 <label>
                   缩小尺寸
@@ -1005,7 +1013,7 @@ function SimpleImageFileList({ title, files, selectedPaths, onToggle, onSelectAl
 }
 
 function DuplicateCombinationSummary({ options, fileCount }) {
-  const quality = parseQualityValues(options.qualities);
+  const quality = parseQualityValues(buildQualityRange(options));
   const size = parseSizeValues(options.sizes);
   const brightness = parseBrightnessValues(options.brightnessValues);
   const qualityCount = quality.values.length;
@@ -1087,6 +1095,23 @@ function parseQualityValues(value) {
   } catch (error) {
     return { values: [], error: error.message };
   }
+}
+
+function buildQualityRange(options) {
+  const start = Math.min(99, Math.max(60, Math.round(Number(options.qualityStart ?? 99))));
+  const end = Math.min(99, Math.max(60, Math.round(Number(options.qualityEnd ?? 70))));
+  const step = Math.min(39, Math.max(1, Math.round(Number(options.qualityStep ?? 1))));
+  const values = [];
+
+  if (start >= end) {
+    for (let quality = start; quality >= end; quality -= step) values.push(quality);
+    if (values.at(-1) !== end) values.push(end);
+  } else {
+    for (let quality = start; quality <= end; quality += step) values.push(quality);
+    if (values.at(-1) !== end) values.push(end);
+  }
+
+  return [...new Set(values)].join(',');
 }
 
 function parseSizeValues(value) {
