@@ -1,0 +1,306 @@
+:root {
+  color: #18212f;
+  background: #f5f6f8;
+  font-family: Inter, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button {
+  border: 1px solid #cbd3df;
+  background: #ffffff;
+  color: #18212f;
+  border-radius: 6px;
+  padding: 9px 14px;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 244px 1fr;
+}
+
+.sidebar {
+  background: #18212f;
+  color: #eef3f8;
+  padding: 24px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.brand {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.brand strong {
+  font-size: 21px;
+}
+
+.brand span,
+.runtime span {
+  color: #aab6c5;
+  font-size: 13px;
+}
+
+nav {
+  display: grid;
+  gap: 8px;
+}
+
+.navItem {
+  border: 0;
+  background: transparent;
+  color: #d6dee8;
+  text-align: left;
+}
+
+.navItem.active {
+  background: #2b7a78;
+  color: #ffffff;
+}
+
+.runtime {
+  margin-top: auto;
+  display: grid;
+  gap: 8px;
+  overflow-wrap: anywhere;
+}
+
+.workspace {
+  padding: 28px;
+  display: grid;
+  gap: 18px;
+  align-content: start;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.topbar h1 {
+  margin: 0 0 6px;
+  font-size: 28px;
+}
+
+.topbar p {
+  margin: 0;
+  color: #5d6978;
+}
+
+.actions,
+.pathRow {
+  display: flex;
+  gap: 10px;
+}
+
+.actions button:first-child,
+.form button[type="submit"] {
+  background: #2b7a78;
+  border-color: #2b7a78;
+  color: #ffffff;
+}
+
+.contentGrid {
+  display: grid;
+  grid-template-columns: minmax(320px, 420px) 1fr;
+  gap: 18px;
+}
+
+.panel {
+  background: #ffffff;
+  border: 1px solid #dce2ea;
+  border-radius: 8px;
+  padding: 18px;
+  min-width: 0;
+}
+
+.panel h2 {
+  margin: 0 0 14px;
+  font-size: 18px;
+}
+
+.form {
+  display: grid;
+  gap: 14px;
+}
+
+label {
+  display: grid;
+  gap: 7px;
+  color: #445063;
+  font-size: 14px;
+}
+
+input,
+select {
+  width: 100%;
+  border: 1px solid #cbd3df;
+  border-radius: 6px;
+  padding: 10px 12px;
+  color: #18212f;
+  background: #ffffff;
+}
+
+.pathRow input {
+  min-width: 0;
+}
+
+.storageList {
+  display: grid;
+  gap: 10px;
+}
+
+.storageItem {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  padding: 12px;
+}
+
+.storageItem.selected {
+  border-color: #2b7a78;
+  box-shadow: inset 0 0 0 1px #2b7a78;
+}
+
+.storageItem span:first-child {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.storageItem small {
+  color: #667386;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.storageItem em {
+  border-radius: 999px;
+  font-size: 12px;
+  font-style: normal;
+  padding: 3px 8px;
+}
+
+.storageItem em.online {
+  background: #dbf4e9;
+  color: #176642;
+}
+
+.storageItem em.offline,
+.storageItem em.unknown {
+  background: #ffe8dd;
+  color: #8a3517;
+}
+
+.storageActions button {
+  padding: 5px 9px;
+  font-size: 12px;
+}
+
+.filesPanel {
+  padding-bottom: 10px;
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.panelHeader span {
+  color: #667386;
+}
+
+.fileTable {
+  display: grid;
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid #e4e9f0;
+  border-radius: 6px;
+}
+
+.fileRow {
+  display: grid;
+  grid-template-columns: 80px 1fr 110px 120px;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #e9edf3;
+  min-width: 0;
+}
+
+.fileRow:last-child {
+  border-bottom: 0;
+}
+
+.fileRow.head {
+  background: #f0f3f6;
+  color: #536173;
+  font-weight: 600;
+}
+
+.fileRow span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.empty {
+  color: #748195;
+  padding: 20px;
+  text-align: center;
+}
+
+.toast {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  max-width: 460px;
+  background: #18212f;
+  color: #ffffff;
+  border-radius: 8px;
+  padding: 12px 16px;
+  box-shadow: 0 14px 42px rgba(24, 33, 47, 0.22);
+}
+
+@media (max-width: 980px) {
+  .shell {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    min-height: auto;
+  }
+
+  .contentGrid {
+    grid-template-columns: 1fr;
+  }
+}
