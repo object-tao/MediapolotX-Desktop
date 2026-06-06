@@ -76,7 +76,7 @@ try {
     replaceOriginal: true,
     backupOriginal: true,
     backupDir: path.join(tempRoot, 'backup'),
-    watermark: { enabled: true, text: 'qtddp', color: 'rgb(80,80,80)', opacity: 0.45, fontSize: 12 }
+    watermark: { enabled: true, text: 'qtddp', color: 'rgb(80,80,80)', opacity: 0.45, fontSize: 54 }
   });
   if (
     aiResult.count !== 1

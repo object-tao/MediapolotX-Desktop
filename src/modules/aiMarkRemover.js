@@ -171,7 +171,7 @@ async function sanitizeImage(inputPath, outputPath, options = {}) {
 
 function createWatermarkSvg(width, height, watermark) {
   const text = escapeXml(watermark.text || 'qtddp');
-  const fontSize = Number(watermark.fontSize || 48);
+  const fontSize = Number(watermark.fontSize || 54);
   const opacity = Number(watermark.opacity ?? 0.45);
   const color = watermark.color || 'rgb(80,80,80)';
   const padding = Math.max(24, Math.round(Math.min(width, height) * 0.035));

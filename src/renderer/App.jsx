@@ -52,7 +52,7 @@ function App() {
       text: 'qtddp',
       color: 'rgb(80,80,80)',
       opacity: 0.45,
-      fontSize: 48
+      fontSize: 54
     },
     jpegQuality: 95
   });
