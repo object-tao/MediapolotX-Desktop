@@ -60,10 +60,16 @@ try {
     includePng: true,
     files: aiFiles,
     selectedPaths: aiFiles.map((file) => file.absolutePath),
-    outputDir: path.join(tempRoot, 'cleaned'),
+    replaceOriginal: true,
+    backupOriginal: true,
+    backupDir: path.join(tempRoot, 'backup'),
     watermark: { enabled: true, text: 'qtddp', color: 'rgb(80,80,80)', opacity: 0.45, fontSize: 12 }
   });
-  if (aiResult.count !== 1 || !fs.existsSync(aiResult.files[0].outputPath)) {
+  if (
+    aiResult.count !== 1
+    || !fs.existsSync(aiResult.files[0].outputPath)
+    || !fs.existsSync(path.join(tempRoot, 'backup', 'ai-test.png'))
+  ) {
     throw new Error('AI mark remover smoke test failed.');
   }
 

@@ -41,6 +41,9 @@ async function scanFolder(folderPath, options = {}) {
 
 async function processFolder(folderPath, options = {}, onProgress = null) {
   const outputDir = options.outputDir || path.join(folderPath, '_mediapolotx_no_ai');
+  const replaceOriginal = options.replaceOriginal === true;
+  const backupOriginal = options.backupOriginal !== false;
+  const backupDir = options.backupDir || path.join(folderPath, '_mediapolotx_backup');
   const files = options.files?.length ? options.files : await scanFolder(folderPath, options);
   const selectedPaths = new Set(options.selectedPaths || files.map((file) => file.absolutePath));
   const selectedFiles = files.filter((file) => selectedPaths.has(file.absolutePath));
@@ -63,17 +66,31 @@ async function processFolder(folderPath, options = {}, onProgress = null) {
       currentFile: file.relativePath
     });
 
-    const relativeOutputPath = file.relativePath.replace(/\.(jpeg|jpg|png)$/i, (match) => {
-      const ext = match.toLowerCase() === '.jpeg' ? '.jpg' : match.toLowerCase();
-      return ext;
-    });
-    const outputPath = path.join(outputDir, relativeOutputPath);
+    const normalizedRelativePath = file.relativePath.replace(/\.(jpeg|jpg|png)$/i, (match) => (
+      match.toLowerCase() === '.jpeg' ? '.jpg' : match.toLowerCase()
+    ));
+    const outputPath = replaceOriginal
+      ? file.absolutePath
+      : path.join(outputDir, normalizedRelativePath);
+    const tempOutputPath = replaceOriginal
+      ? createTempPath(file.absolutePath)
+      : outputPath;
     const detection = await detectAiMarkers(file.absolutePath);
-    await sanitizeImage(file.absolutePath, outputPath, options);
+    await sanitizeImage(file.absolutePath, tempOutputPath, options);
+
+    if (replaceOriginal) {
+      if (backupOriginal) {
+        const backupPath = path.join(backupDir, file.relativePath);
+        await fs.mkdir(path.dirname(backupPath), { recursive: true });
+        await fs.copyFile(file.absolutePath, backupPath);
+      }
+      await fs.rename(tempOutputPath, file.absolutePath);
+    }
 
     results.push({
       inputPath: file.absolutePath,
       outputPath,
+      replacedOriginal: replaceOriginal,
       relativePath: file.relativePath,
       removedAiMarkers: detection.hasAiMarkers,
       markers: detection.markers
@@ -97,7 +114,8 @@ async function processFolder(folderPath, options = {}, onProgress = null) {
 
   return {
     count: results.length,
-    outputDir,
+    outputDir: replaceOriginal ? folderPath : outputDir,
+    backupDir: replaceOriginal && backupOriginal ? backupDir : null,
     files: results
   };
 }
@@ -176,6 +194,13 @@ function escapeXml(value) {
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;');
+}
+
+function createTempPath(filePath) {
+  const dir = path.dirname(filePath);
+  const ext = path.extname(filePath);
+  const baseName = path.basename(filePath, ext);
+  return path.join(dir, `${baseName}.mediapolotx-tmp${ext}`);
 }
 
 module.exports = {

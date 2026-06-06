@@ -43,7 +43,10 @@ function App() {
     includeJpg: true,
     includePng: true,
     selectedPaths: [],
+    replaceOriginal: true,
+    backupOriginal: true,
     outputDir: '',
+    backupDir: '',
     watermark: {
       enabled: false,
       text: 'qtddp',
@@ -267,7 +270,8 @@ function App() {
       setAiToolOptions((current) => ({
         ...current,
         selectedPaths: list.map((file) => file.absolutePath),
-        outputDir: current.outputDir || `${nextOptions.folderPath}\\_mediapolotx_no_ai`
+        outputDir: current.outputDir || `${nextOptions.folderPath}\\_mediapolotx_no_ai`,
+        backupDir: current.backupDir || `${nextOptions.folderPath}\\_mediapolotx_backup`
       }));
       setMessage(`扫描完成：${list.length} 个文件`);
     } catch (error) {
@@ -561,7 +565,7 @@ function App() {
             <div className="panel">
               <h2>去AI标识</h2>
               <div className="toolIntro">
-                <p>递归扫描文件夹中的 JPG/PNG，检测并去除 C2PA、Content Credentials 等 AI 特征元数据。默认输出到源目录下的 `_mediapolotx_no_ai`，不覆盖原图。</p>
+                <p>递归扫描文件夹中的 JPG/PNG，检测并去除 C2PA、Content Credentials 等 AI 特征元数据。默认直接替换原文件，可选择替换前备份。</p>
               </div>
               <div className="form">
                 <DirectoryPicker
@@ -571,7 +575,8 @@ function App() {
                     const nextOptions = {
                       ...aiToolOptions,
                       folderPath,
-                      outputDir: `${folderPath}\\_mediapolotx_no_ai`
+                      outputDir: `${folderPath}\\_mediapolotx_no_ai`,
+                      backupDir: `${folderPath}\\_mediapolotx_backup`
                     };
                     setAiToolOptions(nextOptions);
                     scanAiToolFolder(nextOptions);
@@ -583,10 +588,22 @@ function App() {
                   <label><input type="checkbox" checked={aiToolOptions.includePng} onChange={(event) => setAiToolOptions({ ...aiToolOptions, includePng: event.target.checked })} /> PNG</label>
                 </div>
                 <button onClick={() => scanAiToolFolder()} disabled={busy || !aiToolOptions.folderPath}>重新扫描</button>
-                <label>
-                  输出目录
-                  <input value={aiToolOptions.outputDir} onChange={(event) => setAiToolOptions({ ...aiToolOptions, outputDir: event.target.value })} />
-                </label>
+                <div className="watermarkBox">
+                  <label><input type="checkbox" checked={aiToolOptions.replaceOriginal} onChange={(event) => setAiToolOptions({ ...aiToolOptions, replaceOriginal: event.target.checked })} /> 直接替换原文件</label>
+                  <label><input type="checkbox" checked={aiToolOptions.backupOriginal} onChange={(event) => setAiToolOptions({ ...aiToolOptions, backupOriginal: event.target.checked })} /> 替换前备份原文件</label>
+                  {aiToolOptions.backupOriginal && (
+                    <label>
+                      备份目录
+                      <input value={aiToolOptions.backupDir} onChange={(event) => setAiToolOptions({ ...aiToolOptions, backupDir: event.target.value })} />
+                    </label>
+                  )}
+                  {!aiToolOptions.replaceOriginal && (
+                    <label>
+                      输出目录
+                      <input value={aiToolOptions.outputDir} onChange={(event) => setAiToolOptions({ ...aiToolOptions, outputDir: event.target.value })} />
+                    </label>
+                  )}
+                </div>
                 <label>
                   JPEG 质量
                   <input type="number" min="70" max="100" value={aiToolOptions.jpegQuality} onChange={(event) => setAiToolOptions({ ...aiToolOptions, jpegQuality: event.target.value })} />
