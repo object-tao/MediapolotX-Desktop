@@ -63,8 +63,15 @@ function App() {
     qualityStart: 99,
     qualityEnd: 70,
     qualityStep: 1,
-    sizes: '10x10,20x20',
-    brightnessValues: '0,0.001',
+    widthStart: 5,
+    widthEnd: 5,
+    widthStep: 1,
+    heightStart: 5,
+    heightEnd: 5,
+    heightStep: 1,
+    brightnessStart: 0,
+    brightnessEnd: 0.01,
+    brightnessStep: 0.01,
     selectedPaths: [],
     watermark: {
       enabled: true,
@@ -386,6 +393,8 @@ function App() {
         options: {
           ...duplicateOptions,
           qualities: buildQualityRange(duplicateOptions),
+          sizes: buildSizeRange(duplicateOptions),
+          brightnessValues: buildBrightnessRange(duplicateOptions),
           files: duplicateFiles,
           selectedPaths: duplicateOptions.selectedPaths,
           watermark: {
@@ -773,13 +782,33 @@ function App() {
                   </div>
                   <small>起始 / 结束 / 步长，例如 99、70、1 会生成 99 到 70 共 30 个质量值。</small>
                 </label>
+                <div className="rangePanel">
+                  <strong>缩小尺寸范围</strong>
+                  <label>
+                    宽度 起始 / 结束 / 步长
+                    <div className="tripleInputs">
+                      <input type="number" min="1" max="120" value={duplicateOptions.widthStart} onChange={(event) => setDuplicateOptions({ ...duplicateOptions, widthStart: event.target.value })} />
+                      <input type="number" min="1" max="120" value={duplicateOptions.widthEnd} onChange={(event) => setDuplicateOptions({ ...duplicateOptions, widthEnd: event.target.value })} />
+                      <input type="number" min="1" max="120" value={duplicateOptions.widthStep} onChange={(event) => setDuplicateOptions({ ...duplicateOptions, widthStep: event.target.value })} />
+                    </div>
+                  </label>
+                  <label>
+                    高度 起始 / 结束 / 步长
+                    <div className="tripleInputs">
+                      <input type="number" min="1" max="120" value={duplicateOptions.heightStart} onChange={(event) => setDuplicateOptions({ ...duplicateOptions, heightStart: event.target.value })} />
+                      <input type="number" min="1" max="120" value={duplicateOptions.heightEnd} onChange={(event) => setDuplicateOptions({ ...duplicateOptions, heightEnd: event.target.value })} />
+                      <input type="number" min="1" max="120" value={duplicateOptions.heightStep} onChange={(event) => setDuplicateOptions({ ...duplicateOptions, heightStep: event.target.value })} />
+                    </div>
+                  </label>
+                </div>
                 <label>
-                  缩小尺寸
-                  <input value={duplicateOptions.sizes} onChange={(event) => setDuplicateOptions({ ...duplicateOptions, sizes: event.target.value })} placeholder="10x10,20x20" />
-                </label>
-                <label>
-                  亮度
-                  <input value={duplicateOptions.brightnessValues} onChange={(event) => setDuplicateOptions({ ...duplicateOptions, brightnessValues: event.target.value })} placeholder="0,0.001,-0.001" />
+                  亮度范围
+                  <div className="tripleInputs">
+                    <input type="number" min="-0.5" max="0.5" step="0.001" value={duplicateOptions.brightnessStart} onChange={(event) => setDuplicateOptions({ ...duplicateOptions, brightnessStart: event.target.value })} />
+                    <input type="number" min="-0.5" max="0.5" step="0.001" value={duplicateOptions.brightnessEnd} onChange={(event) => setDuplicateOptions({ ...duplicateOptions, brightnessEnd: event.target.value })} />
+                    <input type="number" min="0.001" max="1" step="0.001" value={duplicateOptions.brightnessStep} onChange={(event) => setDuplicateOptions({ ...duplicateOptions, brightnessStep: event.target.value })} />
+                  </div>
+                  <small>起始 / 结束 / 步长，例如 0、0.010、0.001 会生成 0.000 到 0.010 共 11 个亮度值。</small>
                 </label>
                 <DuplicateCombinationSummary options={duplicateOptions} fileCount={duplicateOptions.selectedPaths.length} />
                 <div className="watermarkBox">
@@ -1014,8 +1043,8 @@ function SimpleImageFileList({ title, files, selectedPaths, onToggle, onSelectAl
 
 function DuplicateCombinationSummary({ options, fileCount }) {
   const quality = parseQualityValues(buildQualityRange(options));
-  const size = parseSizeValues(options.sizes);
-  const brightness = parseBrightnessValues(options.brightnessValues);
+  const size = parseSizeValues(buildSizeRange(options));
+  const brightness = parseBrightnessValues(buildBrightnessRange(options));
   const qualityCount = quality.values.length;
   const sizeCount = size.values.length;
   const brightnessCount = brightness.values.length;
@@ -1098,20 +1127,56 @@ function parseQualityValues(value) {
 }
 
 function buildQualityRange(options) {
-  const start = Math.min(99, Math.max(60, Math.round(Number(options.qualityStart ?? 99))));
-  const end = Math.min(99, Math.max(60, Math.round(Number(options.qualityEnd ?? 70))));
-  const step = Math.min(39, Math.max(1, Math.round(Number(options.qualityStep ?? 1))));
-  const values = [];
+  return buildNumericRange(options.qualityStart ?? 99, options.qualityEnd ?? 70, options.qualityStep ?? 1, 60, 99, 0)
+    .map((value) => Math.round(value))
+    .join(',');
+}
 
-  if (start >= end) {
-    for (let quality = start; quality >= end; quality -= step) values.push(quality);
-    if (values.at(-1) !== end) values.push(end);
-  } else {
-    for (let quality = start; quality <= end; quality += step) values.push(quality);
-    if (values.at(-1) !== end) values.push(end);
+function buildSizeRange(options) {
+  const widths = buildNumericRange(options.widthStart ?? 5, options.widthEnd ?? 5, options.widthStep ?? 1, 1, 120, 0);
+  const heights = buildNumericRange(options.heightStart ?? 5, options.heightEnd ?? 5, options.heightStep ?? 1, 1, 120, 0);
+  const sizes = [];
+
+  for (const width of widths) {
+    for (const height of heights) {
+      sizes.push(`${Math.round(width)}x${Math.round(height)}`);
+    }
   }
 
-  return [...new Set(values)].join(',');
+  return [...new Set(sizes)].join(',');
+}
+
+function buildBrightnessRange(options) {
+  return buildNumericRange(options.brightnessStart ?? 0, options.brightnessEnd ?? 0.01, options.brightnessStep ?? 0.01, -0.5, 0.5, 3)
+    .map((value) => value.toFixed(3))
+    .join(',');
+}
+
+function buildNumericRange(startValue, endValue, stepValue, min, max, decimals) {
+  const start = clampNumber(Number(startValue), min, max);
+  const end = clampNumber(Number(endValue), min, max);
+  const step = Math.max(Math.abs(Number(stepValue) || 1), decimals > 0 ? 0.001 : 1);
+  const values = [];
+  const factor = 10 ** decimals;
+
+  if (start >= end) {
+    for (let value = start; value >= end; value -= step) values.push(roundTo(value, factor));
+    if (values.at(-1) !== roundTo(end, factor)) values.push(roundTo(end, factor));
+  } else {
+    for (let value = start; value <= end; value += step) values.push(roundTo(value, factor));
+    if (values.at(-1) !== roundTo(end, factor)) values.push(roundTo(end, factor));
+  }
+
+  return [...new Set(values)];
+}
+
+function clampNumber(value, min, max) {
+  if (Number.isNaN(value)) return min;
+  return Math.min(max, Math.max(min, value));
+}
+
+function roundTo(value, factor) {
+  return Math.round(value * factor) / factor;
 }
 
 function parseSizeValues(value) {

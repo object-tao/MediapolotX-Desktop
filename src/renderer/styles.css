@@ -511,6 +511,19 @@ select {
   font-size: 13px;
 }
 
+.rangePanel {
+  display: grid;
+  gap: 12px;
+  border: 1px solid #e4e9f0;
+  border-radius: 8px;
+  padding: 14px;
+  background: #f9fbfd;
+}
+
+.rangePanel > strong {
+  color: #18212f;
+}
+
 .metrics {
   display: grid;
   grid-template-columns: 1fr 1fr;
