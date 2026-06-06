@@ -89,7 +89,9 @@ try {
   }
 
   const duplicateRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mediapolotx-duplicate-'));
-  const duplicateImage = path.join(duplicateRoot, 'image.png');
+  const nestedDuplicateDir = path.join(duplicateRoot, 'CTPAT认证');
+  fs.mkdirSync(nestedDuplicateDir, { recursive: true });
+  const duplicateImage = path.join(nestedDuplicateDir, 'image.png');
   fs.copyFileSync(pngPath, duplicateImage);
   const duplicateFiles = await imageDuplicator.scanFolder(duplicateRoot);
   const combinations = imageDuplicator.buildCombinations({
@@ -109,12 +111,12 @@ try {
     combinations.length !== 8
     || duplicateResult.totalCombinations !== 8
     || duplicateResult.totalOutputs !== 8
-    || fs.readdirSync(duplicateRoot, { withFileTypes: true }).filter((entry) => entry.isDirectory()).length !== 8
+    || fs.readdirSync(nestedDuplicateDir, { withFileTypes: true }).filter((entry) => entry.isDirectory()).length !== 8
   ) {
     throw new Error('Image duplicator smoke test failed.');
   }
-  const generatedDir = fs.readdirSync(duplicateRoot, { withFileTypes: true }).find((entry) => entry.isDirectory());
-  const generatedEntries = fs.readdirSync(path.join(duplicateRoot, generatedDir.name), { withFileTypes: true });
+  const generatedDir = fs.readdirSync(nestedDuplicateDir, { withFileTypes: true }).find((entry) => entry.isDirectory());
+  const generatedEntries = fs.readdirSync(path.join(nestedDuplicateDir, generatedDir.name), { withFileTypes: true });
   if (!generatedEntries.some((entry) => entry.isFile() && entry.name === 'image.png')) {
     throw new Error('Image duplicator output layout smoke test failed.');
   }

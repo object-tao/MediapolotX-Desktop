@@ -31,7 +31,6 @@ async function duplicateImages(folderPath, options = {}, onProgress = null) {
   const selectedPaths = new Set(options.selectedPaths || files.map((file) => file.absolutePath));
   const selectedFiles = files.filter((file) => selectedPaths.has(file.absolutePath));
   const combinations = buildCombinations(options);
-  const outputNames = createOutputNameMap(selectedFiles);
   const total = selectedFiles.length * combinations.length;
   const batchStart = Date.now();
   let completed = 0;
@@ -40,7 +39,7 @@ async function duplicateImages(folderPath, options = {}, onProgress = null) {
 
   for (let comboIndex = 0; comboIndex < combinations.length; comboIndex += 1) {
     const combination = combinations[comboIndex];
-    const outputDir = path.join(folderPath, createCombinationDirectoryName(batchStart + comboIndex, combination));
+    const combinationDirectoryName = createCombinationDirectoryName(batchStart + comboIndex, combination);
 
     for (const file of selectedFiles) {
       onProgress?.({
@@ -52,7 +51,7 @@ async function duplicateImages(folderPath, options = {}, onProgress = null) {
         currentCombination: combination
       });
 
-      await processOne(file, outputDir, outputNames.get(file.absolutePath), combination, options);
+      await processOne(file, combinationDirectoryName, combination, options);
       completed += 1;
 
       onProgress?.({
@@ -77,8 +76,9 @@ async function duplicateImages(folderPath, options = {}, onProgress = null) {
   };
 }
 
-async function processOne(file, outputDir, outputName, combination, options) {
-  const outputPath = path.join(outputDir, outputName);
+async function processOne(file, combinationDirectoryName, combination, options) {
+  const outputDir = path.join(path.dirname(file.absolutePath), combinationDirectoryName);
+  const outputPath = path.join(outputDir, path.basename(file.absolutePath));
   await fs.mkdir(outputDir, { recursive: true });
 
   const decoded = await sharp(file.absolutePath, { limitInputPixels: false })
@@ -220,23 +220,6 @@ async function walk(root, onFile) {
 function shouldIgnoreDirectory(directoryName) {
   const normalized = directoryName.toLowerCase();
   return IGNORED_DIRECTORY_NAMES.has(normalized) || GENERATED_DIRECTORY_PATTERN.test(directoryName);
-}
-
-function createOutputNameMap(files) {
-  const counts = new Map();
-  const names = new Map();
-
-  for (const file of files) {
-    const baseName = path.basename(file.relativePath);
-    const ext = path.extname(baseName);
-    const nameWithoutExt = path.basename(baseName, ext);
-    const key = baseName.toLowerCase();
-    const count = counts.get(key) || 0;
-    counts.set(key, count + 1);
-    names.set(file.absolutePath, count === 0 ? baseName : `${nameWithoutExt}-${count + 1}${ext}`);
-  }
-
-  return names;
 }
 
 function normalizeRelativePath(relativePath) {
