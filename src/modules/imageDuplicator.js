@@ -7,6 +7,7 @@ const IGNORED_DIRECTORY_NAMES = new Set([
   '_mediapolotx_backup',
   '_mediapolotx_no_ai'
 ]);
+const GENERATED_DIRECTORY_PATTERN = /^\d{10,}-t\d+-c\d+x\d+-l-?\d+\.\d{3}-q\d+$/;
 
 async function scanFolder(folderPath) {
   const files = [];
@@ -30,6 +31,7 @@ async function duplicateImages(folderPath, options = {}, onProgress = null) {
   const selectedPaths = new Set(options.selectedPaths || files.map((file) => file.absolutePath));
   const selectedFiles = files.filter((file) => selectedPaths.has(file.absolutePath));
   const combinations = buildCombinations(options);
+  const outputNames = createOutputNameMap(selectedFiles);
   const total = selectedFiles.length * combinations.length;
   const batchStart = Date.now();
   let completed = 0;
@@ -50,7 +52,7 @@ async function duplicateImages(folderPath, options = {}, onProgress = null) {
         currentCombination: combination
       });
 
-      await processOne(file, folderPath, outputDir, combination, options);
+      await processOne(file, outputDir, outputNames.get(file.absolutePath), combination, options);
       completed += 1;
 
       onProgress?.({
@@ -75,9 +77,9 @@ async function duplicateImages(folderPath, options = {}, onProgress = null) {
   };
 }
 
-async function processOne(file, folderPath, outputDir, combination, options) {
-  const outputPath = path.join(outputDir, file.relativePath);
-  await fs.mkdir(path.dirname(outputPath), { recursive: true });
+async function processOne(file, outputDir, outputName, combination, options) {
+  const outputPath = path.join(outputDir, outputName);
+  await fs.mkdir(outputDir, { recursive: true });
 
   const decoded = await sharp(file.absolutePath, { limitInputPixels: false })
     .rotate()
@@ -207,12 +209,34 @@ async function walk(root, onFile) {
   for (const entry of entries) {
     const fullPath = path.join(root, entry.name);
     if (entry.isDirectory()) {
-      if (IGNORED_DIRECTORY_NAMES.has(entry.name.toLowerCase())) continue;
+      if (shouldIgnoreDirectory(entry.name)) continue;
       await walk(fullPath, onFile);
     } else if (entry.isFile()) {
       await onFile(fullPath, await fs.stat(fullPath));
     }
   }
+}
+
+function shouldIgnoreDirectory(directoryName) {
+  const normalized = directoryName.toLowerCase();
+  return IGNORED_DIRECTORY_NAMES.has(normalized) || GENERATED_DIRECTORY_PATTERN.test(directoryName);
+}
+
+function createOutputNameMap(files) {
+  const counts = new Map();
+  const names = new Map();
+
+  for (const file of files) {
+    const baseName = path.basename(file.relativePath);
+    const ext = path.extname(baseName);
+    const nameWithoutExt = path.basename(baseName, ext);
+    const key = baseName.toLowerCase();
+    const count = counts.get(key) || 0;
+    counts.set(key, count + 1);
+    names.set(file.absolutePath, count === 0 ? baseName : `${nameWithoutExt}-${count + 1}${ext}`);
+  }
+
+  return names;
 }
 
 function normalizeRelativePath(relativePath) {

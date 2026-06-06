@@ -113,6 +113,15 @@ try {
   ) {
     throw new Error('Image duplicator smoke test failed.');
   }
+  const generatedDir = fs.readdirSync(duplicateRoot, { withFileTypes: true }).find((entry) => entry.isDirectory());
+  const generatedEntries = fs.readdirSync(path.join(duplicateRoot, generatedDir.name), { withFileTypes: true });
+  if (!generatedEntries.some((entry) => entry.isFile() && entry.name === 'image.png')) {
+    throw new Error('Image duplicator output layout smoke test failed.');
+  }
+  const rescannedDuplicateFiles = await imageDuplicator.scanFolder(duplicateRoot);
+  if (rescannedDuplicateFiles.length !== 1) {
+    throw new Error('Image duplicator generated directory exclusion smoke test failed.');
+  }
   fs.rmSync(duplicateRoot, { recursive: true, force: true });
 
   db.close();
