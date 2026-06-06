@@ -88,6 +88,7 @@ async function processFolder(folderPath, options = {}, onProgress = null) {
       }
       await fs.rename(tempOutputPath, file.absolutePath);
     }
+    const afterDetection = await detectAiMarkers(outputPath);
 
     results.push({
       inputPath: file.absolutePath,
@@ -95,7 +96,9 @@ async function processFolder(folderPath, options = {}, onProgress = null) {
       replacedOriginal: replaceOriginal,
       relativePath: file.relativePath,
       removedAiMarkers: detection.hasAiMarkers,
-      markers: detection.markers
+      markers: detection.markers,
+      stillHasAiMarkers: afterDetection.hasAiMarkers,
+      remainingMarkers: afterDetection.markers
     });
 
     onProgress?.({
@@ -136,12 +139,23 @@ async function sanitizeImage(inputPath, outputPath, options = {}) {
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
 
   const ext = path.extname(outputPath).toLowerCase();
-  let pipeline = sharp(inputPath, { limitInputPixels: false }).rotate();
-  const metadata = await sharp(inputPath).metadata();
+  const decoded = await sharp(inputPath, { limitInputPixels: false })
+    .rotate()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const metadata = decoded.info;
+  let pipeline = sharp(decoded.data, {
+    raw: {
+      width: metadata.width,
+      height: metadata.height,
+      channels: metadata.channels
+    },
+    limitInputPixels: false
+  });
 
   if (options.watermark?.enabled) {
     pipeline = pipeline.composite([{
-      input: createWatermarkSvg(metadata.width || 1600, metadata.height || 1200, options.watermark),
+      input: createWatermarkSvg(metadata.width, metadata.height, options.watermark),
       gravity: 'southeast'
     }]);
   }
@@ -149,7 +163,7 @@ async function sanitizeImage(inputPath, outputPath, options = {}) {
   if (ext === '.png') {
     await pipeline.png({ compressionLevel: 6, adaptiveFiltering: true }).toFile(outputPath);
   } else {
-    await pipeline.jpeg({ quality: Number(options.jpegQuality || 95), mozjpeg: true }).toFile(outputPath);
+    await pipeline.flatten({ background: '#ffffff' }).jpeg({ quality: Number(options.jpegQuality || 95), mozjpeg: true }).toFile(outputPath);
   }
 
   return { outputPath };
@@ -157,7 +171,7 @@ async function sanitizeImage(inputPath, outputPath, options = {}) {
 
 function createWatermarkSvg(width, height, watermark) {
   const text = escapeXml(watermark.text || 'qtddp');
-  const fontSize = Number(watermark.fontSize || 32);
+  const fontSize = Number(watermark.fontSize || 48);
   const opacity = Number(watermark.opacity ?? 0.45);
   const color = watermark.color || 'rgb(80,80,80)';
   const padding = Math.max(24, Math.round(Math.min(width, height) * 0.035));
@@ -168,6 +182,9 @@ function createWatermarkSvg(width, height, watermark) {
         text-anchor="end"
         font-family="Arial, Microsoft YaHei, sans-serif"
         font-size="${fontSize}"
+        stroke="rgba(255,255,255,0.55)"
+        stroke-width="${Math.max(2, Math.round(fontSize * 0.08))}"
+        paint-order="stroke"
         fill="${escapeXml(color)}"
         fill-opacity="${opacity}">${text}</text>
     </svg>

@@ -52,8 +52,14 @@ try {
   const pngPath = path.join(tempRoot, 'ai-test.png');
   fs.writeFileSync(
     pngPath,
-    Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=', 'base64')
+    Buffer.concat([
+      Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=', 'base64'),
+      Buffer.from('c2pa')
+    ])
   );
+  if (!(await aiMarkRemover.detectAiMarkers(pngPath)).hasAiMarkers) {
+    throw new Error('AI marker fixture smoke test failed.');
+  }
   const aiFiles = await aiMarkRemover.scanFolder(tempRoot, { includeJpg: false, includePng: true });
   const ignoredBackupDir = path.join(tempRoot, '_mediapolotx_backup');
   fs.mkdirSync(ignoredBackupDir, { recursive: true });
@@ -76,6 +82,7 @@ try {
     aiResult.count !== 1
     || !fs.existsSync(aiResult.files[0].outputPath)
     || !fs.existsSync(path.join(tempRoot, 'backup', 'ai-test.png'))
+    || (await aiMarkRemover.detectAiMarkers(pngPath)).hasAiMarkers
   ) {
     throw new Error('AI mark remover smoke test failed.');
   }

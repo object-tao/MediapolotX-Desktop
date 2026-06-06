@@ -48,11 +48,11 @@ function App() {
     outputDir: '',
     backupDir: '',
     watermark: {
-      enabled: false,
+      enabled: true,
       text: 'qtddp',
       color: 'rgb(80,80,80)',
       opacity: 0.45,
-      fontSize: 32
+      fontSize: 48
     },
     jpegQuality: 95
   });
@@ -303,7 +303,17 @@ function App() {
         }
       });
       setAiToolProgress({ phase: 'completed', total: result.count, completed: result.count, percent: 100 });
-      setMessage(`处理完成：${result.count} 个文件`);
+      const remaining = result.files.filter((file) => file.stillHasAiMarkers).length;
+      const rescanned = await window.mediapolotx.tools.scanAiMarks({
+        folderPath: aiToolOptions.folderPath,
+        options: aiToolOptions
+      });
+      setAiToolFiles(rescanned);
+      setAiToolOptions((current) => ({
+        ...current,
+        selectedPaths: rescanned.map((file) => file.absolutePath)
+      }));
+      setMessage(`处理完成：${result.count} 个文件，处理后仍疑似 ${remaining} 个`);
       await openPath(result.outputDir);
     } catch (error) {
       setMessage(`处理失败：${error.message}`);
@@ -609,7 +619,7 @@ function App() {
                   <input type="number" min="70" max="100" value={aiToolOptions.jpegQuality} onChange={(event) => setAiToolOptions({ ...aiToolOptions, jpegQuality: event.target.value })} />
                 </label>
                 <div className="watermarkBox">
-                  <label><input type="checkbox" checked={aiToolOptions.watermark.enabled} onChange={(event) => setAiToolOptions({ ...aiToolOptions, watermark: { ...aiToolOptions.watermark, enabled: event.target.checked } })} /> 添加文字水印</label>
+                  <label><input type="checkbox" checked={aiToolOptions.watermark.enabled} onChange={(event) => setAiToolOptions({ ...aiToolOptions, watermark: { ...aiToolOptions.watermark, enabled: event.target.checked } })} /> 添加文字水印（默认开启）</label>
                   <label>
                     水印文字
                     <input value={aiToolOptions.watermark.text} onChange={(event) => setAiToolOptions({ ...aiToolOptions, watermark: { ...aiToolOptions.watermark, text: event.target.value } })} />
