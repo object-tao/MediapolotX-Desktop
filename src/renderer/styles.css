@@ -491,6 +491,15 @@ select {
   color: #1f6764;
 }
 
+.inputError {
+  border: 1px solid #ffd2c2;
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: #9b3a1b;
+  background: #fff4ef;
+  font-size: 13px;
+}
+
 .metrics {
   display: grid;
   grid-template-columns: 1fr 1fr;

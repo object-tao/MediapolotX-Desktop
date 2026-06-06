@@ -1005,18 +1005,25 @@ function SimpleImageFileList({ title, files, selectedPaths, onToggle, onSelectAl
 }
 
 function DuplicateCombinationSummary({ options, fileCount }) {
-  const qualityCount = countCsvValues(options.qualities);
-  const sizeCount = countCsvValues(options.sizes);
-  const brightnessCount = countCsvValues(options.brightnessValues);
+  const quality = parseQualityValues(options.qualities);
+  const size = parseSizeValues(options.sizes);
+  const brightness = parseBrightnessValues(options.brightnessValues);
+  const qualityCount = quality.values.length;
+  const sizeCount = size.values.length;
+  const brightnessCount = brightness.values.length;
   const combinations = qualityCount * sizeCount * brightnessCount;
+  const errors = [quality.error, size.error, brightness.error].filter(Boolean);
 
   return (
-    <div className="combinationSummary">
-      <span>质量 {qualityCount}</span>
-      <span>尺寸 {sizeCount}</span>
-      <span>亮度 {brightnessCount}</span>
-      <strong>{combinations} 套 / {combinations * fileCount} 张</strong>
-    </div>
+    <>
+      <div className="combinationSummary">
+        <span>质量 {qualityCount}</span>
+        <span>尺寸 {sizeCount}</span>
+        <span>亮度 {brightnessCount}</span>
+        <strong>{combinations} 套 / {combinations * fileCount} 张</strong>
+      </div>
+      {errors.length > 0 && <div className="inputError">{errors.join('；')}</div>}
+    </>
   );
 }
 
@@ -1073,8 +1080,47 @@ function formatBytes(bytes) {
   return `${(bytes / 1024 ** index).toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
 }
 
-function countCsvValues(value) {
-  return String(value).split(',').map((item) => item.trim()).filter(Boolean).length;
+function parseQualityValues(value) {
+  try {
+    const values = parseNumberList(value).map((item) => Math.min(99, Math.max(60, Math.round(item))));
+    return { values: [...new Set(values)] };
+  } catch (error) {
+    return { values: [], error: error.message };
+  }
+}
+
+function parseSizeValues(value) {
+  try {
+    const values = String(value).split(',').map((item) => item.trim()).filter(Boolean).map((item) => {
+      const match = item.match(/^(\d{1,3})(?:x(\d{1,3}))?$/i);
+      if (!match) throw new Error(`尺寸格式错误：${item}`);
+      const width = Math.min(120, Math.max(1, Number(match[1])));
+      const height = Math.min(120, Math.max(1, Number(match[2] || match[1])));
+      return `${width}x${height}`;
+    });
+    return { values: [...new Set(values)] };
+  } catch (error) {
+    return { values: [], error: error.message };
+  }
+}
+
+function parseBrightnessValues(value) {
+  try {
+    const values = parseNumberList(value).map((item) => Number(Math.min(0.5, Math.max(-0.5, item)).toFixed(3)));
+    return { values: [...new Set(values)] };
+  } catch (error) {
+    return { values: [], error: error.message };
+  }
+}
+
+function parseNumberList(value) {
+  const items = String(value).split(',').map((item) => item.trim()).filter(Boolean);
+  if (items.length === 0) throw new Error('参数不能为空');
+  return items.map((item) => {
+    const number = Number(item);
+    if (Number.isNaN(number)) throw new Error(`数字格式错误：${item}`);
+    return number;
+  });
 }
 
 export default App;
