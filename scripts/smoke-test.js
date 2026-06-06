@@ -7,6 +7,7 @@ const { createFileScanner } = require('../src/modules/fileScanner');
 const { createStorageManager } = require('../src/modules/storageManager');
 const { createSettingsManager } = require('../src/modules/settingsManager');
 const { createTaskManager } = require('../src/modules/taskManager');
+const aiMarkRemover = require('../src/modules/aiMarkRemover');
 
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mediapolotx-smoke-'));
 const dbPath = path.join(tempRoot, 'smoke.sqlite');
@@ -46,6 +47,24 @@ try {
   ]);
   if (stored.received !== 2 || stored.inserted !== 1 || taskManager.getRecentTasks().length !== 1) {
     throw new Error('Remote task smoke test failed.');
+  }
+
+  const pngPath = path.join(tempRoot, 'ai-test.png');
+  fs.writeFileSync(
+    pngPath,
+    Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=', 'base64')
+  );
+  const aiFiles = await aiMarkRemover.scanFolder(tempRoot, { includeJpg: false, includePng: true });
+  const aiResult = await aiMarkRemover.processFolder(tempRoot, {
+    includeJpg: false,
+    includePng: true,
+    files: aiFiles,
+    selectedPaths: aiFiles.map((file) => file.absolutePath),
+    outputDir: path.join(tempRoot, 'cleaned'),
+    watermark: { enabled: true, text: 'qtddp', color: 'rgb(80,80,80)', opacity: 0.45, fontSize: 12 }
+  });
+  if (aiResult.count !== 1 || !fs.existsSync(aiResult.files[0].outputPath)) {
+    throw new Error('AI mark remover smoke test failed.');
   }
 
   db.close();

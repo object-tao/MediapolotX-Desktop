@@ -342,6 +342,93 @@ select {
   margin-bottom: 16px;
 }
 
+.checkRow {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+}
+
+.checkRow label,
+.watermarkBox > label:first-child {
+  display: flex;
+  grid-template-columns: none;
+  align-items: center;
+  gap: 8px;
+}
+
+.checkRow input,
+.watermarkBox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+}
+
+.watermarkBox {
+  display: grid;
+  gap: 12px;
+  border: 1px solid #e4e9f0;
+  border-radius: 8px;
+  padding: 14px;
+  background: #f9fbfd;
+}
+
+.aiFileList {
+  display: grid;
+  gap: 8px;
+  max-height: 520px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.aiFileItem {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  align-items: center;
+  text-align: left;
+  padding: 10px 12px;
+}
+
+.aiFileItem input {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+}
+
+.aiFileItem span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.aiFileItem strong,
+.aiFileItem small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.aiFileItem small {
+  color: #667386;
+}
+
+.aiFileItem em {
+  border-radius: 999px;
+  font-size: 12px;
+  font-style: normal;
+  padding: 4px 9px;
+}
+
+.aiFileItem em.detected {
+  background: #ffe8dd;
+  color: #8a3517;
+}
+
+.aiFileItem em.clean {
+  background: #dbf4e9;
+  color: #176642;
+}
+
 .metrics {
   display: grid;
   grid-template-columns: 1fr 1fr;

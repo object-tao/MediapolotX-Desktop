@@ -28,6 +28,10 @@ contextBridge.exposeInMainWorld('mediapolotx', {
     videoCoverBatch: (payload) => ipcRenderer.invoke('tasks:videoCoverBatch', payload),
     thumbnailBatch: (payload) => ipcRenderer.invoke('tasks:thumbnailBatch', payload)
   },
+  tools: {
+    scanAiMarks: (payload) => ipcRenderer.invoke('tools:scanAiMarks', payload),
+    removeAiMarks: (payload) => ipcRenderer.invoke('tools:removeAiMarks', payload)
+  },
   settings: {
     getAll: () => ipcRenderer.invoke('settings:getAll'),
     set: (payload) => ipcRenderer.invoke('settings:set', payload)

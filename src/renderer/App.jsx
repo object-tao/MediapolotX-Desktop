@@ -38,6 +38,22 @@ function App() {
     outputDir: ''
   });
   const [syncOptions, setSyncOptions] = useState({ baseUrl: 'http://127.0.0.1:3000/api', token: '' });
+  const [aiToolOptions, setAiToolOptions] = useState({
+    folderPath: '',
+    includeJpg: true,
+    includePng: true,
+    selectedPaths: [],
+    outputDir: '',
+    watermark: {
+      enabled: false,
+      text: 'qtddp',
+      color: 'rgb(80,80,80)',
+      opacity: 0.45,
+      fontSize: 32
+    },
+    jpegQuality: 95
+  });
+  const [aiToolFiles, setAiToolFiles] = useState([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -81,6 +97,7 @@ function App() {
       if (settings.syncOptions) setSyncOptions(settings.syncOptions);
       if (settings.imageOptions) setImageOptions((current) => ({ ...current, ...settings.imageOptions }));
       if (settings.videoOptions) setVideoOptions((current) => ({ ...current, ...settings.videoOptions }));
+      if (settings.aiToolOptions) setAiToolOptions((current) => ({ ...current, ...settings.aiToolOptions }));
     });
     refreshStorages();
     refreshTasks();
@@ -227,6 +244,68 @@ function App() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function scanAiToolFolder(nextOptions = aiToolOptions) {
+    if (!nextOptions.folderPath) return;
+    setBusy(true);
+    setMessage('正在递归扫描 JPG/PNG 文件...');
+    try {
+      await window.mediapolotx.settings.set({ key: 'aiToolOptions', value: nextOptions });
+      const list = await window.mediapolotx.tools.scanAiMarks({
+        folderPath: nextOptions.folderPath,
+        options: nextOptions
+      });
+      setAiToolFiles(list);
+      setAiToolOptions((current) => ({
+        ...current,
+        selectedPaths: list.map((file) => file.absolutePath),
+        outputDir: current.outputDir || `${nextOptions.folderPath}\\_mediapolotx_no_ai`
+      }));
+      setMessage(`扫描完成：${list.length} 个文件`);
+    } catch (error) {
+      setMessage(`扫描失败：${error.message}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function processAiToolFiles() {
+    if (!aiToolOptions.folderPath || aiToolOptions.selectedPaths.length === 0) return;
+    setBusy(true);
+    setMessage('正在去除 AI 标识并处理图片...');
+    try {
+      await window.mediapolotx.settings.set({ key: 'aiToolOptions', value: aiToolOptions });
+      const result = await window.mediapolotx.tools.removeAiMarks({
+        folderPath: aiToolOptions.folderPath,
+        options: {
+          ...aiToolOptions,
+          files: aiToolFiles,
+          selectedPaths: aiToolOptions.selectedPaths,
+          jpegQuality: Number(aiToolOptions.jpegQuality),
+          watermark: {
+            ...aiToolOptions.watermark,
+            opacity: Number(aiToolOptions.watermark.opacity),
+            fontSize: Number(aiToolOptions.watermark.fontSize)
+          }
+        }
+      });
+      setMessage(`处理完成：${result.count} 个文件`);
+      await openPath(result.outputDir);
+    } catch (error) {
+      setMessage(`处理失败：${error.message}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function toggleAiToolFile(filePath) {
+    setAiToolOptions((current) => ({
+      ...current,
+      selectedPaths: current.selectedPaths.includes(filePath)
+        ? current.selectedPaths.filter((item) => item !== filePath)
+        : [...current.selectedPaths, filePath]
+    }));
   }
 
   async function openPath(targetPath) {
@@ -473,14 +552,69 @@ function App() {
             <div className="panel">
               <h2>去AI标识</h2>
               <div className="toolIntro">
-                <p>用于处理图片中的 AI 生成标识、水印或平台痕迹。当前已接入菜单入口，后续会在这里加入检测、预览、批量处理和结果导出。</p>
+                <p>递归扫描文件夹中的 JPG/PNG，检测并去除 C2PA、Content Credentials 等 AI 特征元数据。默认输出到源目录下的 `_mediapolotx_no_ai`，不覆盖原图。</p>
               </div>
               <div className="form">
-                <button disabled>选择图片区域</button>
-                <button disabled>批量去除</button>
+                <DirectoryPicker
+                  label="处理文件夹"
+                  value={aiToolOptions.folderPath}
+                  onPick={(folderPath) => {
+                    const nextOptions = {
+                      ...aiToolOptions,
+                      folderPath,
+                      outputDir: `${folderPath}\\_mediapolotx_no_ai`
+                    };
+                    setAiToolOptions(nextOptions);
+                    scanAiToolFolder(nextOptions);
+                  }}
+                  selectDirectory={selectDirectory}
+                />
+                <div className="checkRow">
+                  <label><input type="checkbox" checked={aiToolOptions.includeJpg} onChange={(event) => setAiToolOptions({ ...aiToolOptions, includeJpg: event.target.checked })} /> JPG</label>
+                  <label><input type="checkbox" checked={aiToolOptions.includePng} onChange={(event) => setAiToolOptions({ ...aiToolOptions, includePng: event.target.checked })} /> PNG</label>
+                </div>
+                <button onClick={() => scanAiToolFolder()} disabled={busy || !aiToolOptions.folderPath}>重新扫描</button>
+                <label>
+                  输出目录
+                  <input value={aiToolOptions.outputDir} onChange={(event) => setAiToolOptions({ ...aiToolOptions, outputDir: event.target.value })} />
+                </label>
+                <label>
+                  JPEG 质量
+                  <input type="number" min="70" max="100" value={aiToolOptions.jpegQuality} onChange={(event) => setAiToolOptions({ ...aiToolOptions, jpegQuality: event.target.value })} />
+                </label>
+                <div className="watermarkBox">
+                  <label><input type="checkbox" checked={aiToolOptions.watermark.enabled} onChange={(event) => setAiToolOptions({ ...aiToolOptions, watermark: { ...aiToolOptions.watermark, enabled: event.target.checked } })} /> 添加文字水印</label>
+                  <label>
+                    水印文字
+                    <input value={aiToolOptions.watermark.text} onChange={(event) => setAiToolOptions({ ...aiToolOptions, watermark: { ...aiToolOptions.watermark, text: event.target.value } })} />
+                  </label>
+                  <div className="splitInputs">
+                    <label>
+                      颜色
+                      <input value={aiToolOptions.watermark.color} onChange={(event) => setAiToolOptions({ ...aiToolOptions, watermark: { ...aiToolOptions.watermark, color: event.target.value } })} />
+                    </label>
+                    <label>
+                      字号
+                      <input type="number" min="8" max="200" value={aiToolOptions.watermark.fontSize} onChange={(event) => setAiToolOptions({ ...aiToolOptions, watermark: { ...aiToolOptions.watermark, fontSize: event.target.value } })} />
+                    </label>
+                  </div>
+                  <label>
+                    透明度 {Math.round(Number(aiToolOptions.watermark.opacity) * 100)}%
+                    <input type="range" min="0.05" max="1" step="0.05" value={aiToolOptions.watermark.opacity} onChange={(event) => setAiToolOptions({ ...aiToolOptions, watermark: { ...aiToolOptions.watermark, opacity: event.target.value } })} />
+                  </label>
+                </div>
+                <button onClick={processAiToolFiles} disabled={busy || aiToolOptions.selectedPaths.length === 0}>
+                  处理 {aiToolOptions.selectedPaths.length} 个文件
+                </button>
               </div>
             </div>
-            <SelectionSummary selectedImages={selectedImages} selectedVideos={selectedVideos} />
+            <AiToolFileList
+              files={aiToolFiles}
+              selectedPaths={aiToolOptions.selectedPaths}
+              onToggle={toggleAiToolFile}
+              onSelectAll={() => setAiToolOptions({ ...aiToolOptions, selectedPaths: aiToolFiles.map((file) => file.absolutePath) })}
+              onClear={() => setAiToolOptions({ ...aiToolOptions, selectedPaths: [] })}
+            />
           </section>
         )}
 
@@ -609,6 +743,36 @@ function TaskList({ tasks, compact = false, onOpenPath }) {
         {tasks.length === 0 && <div className="empty">暂无任务</div>}
       </div>
     </section>
+  );
+}
+
+function AiToolFileList({ files, selectedPaths, onToggle, onSelectAll, onClear }) {
+  const aiCount = files.filter((file) => file.hasAiMarkers).length;
+
+  return (
+    <div className="panel">
+      <div className="panelHeader">
+        <h2>扫描结果</h2>
+        <div className="tableActions">
+          <span>{files.length} 个文件，疑似含 AI 标识 {aiCount} 个</span>
+          <button onClick={onSelectAll} disabled={files.length === 0}>全选</button>
+          <button onClick={onClear} disabled={selectedPaths.length === 0}>清空</button>
+        </div>
+      </div>
+      <div className="aiFileList">
+        {files.map((file) => (
+          <button className="aiFileItem" key={file.absolutePath} onClick={() => onToggle(file.absolutePath)}>
+            <input type="checkbox" readOnly checked={selectedPaths.includes(file.absolutePath)} />
+            <span>
+              <strong>{file.relativePath}</strong>
+              <small>{file.hasAiMarkers ? `检测到：${file.markers.join(', ')}` : '未检测到明显 AI 标识，仍会清理图片元数据'}</small>
+            </span>
+            <em className={file.hasAiMarkers ? 'detected' : 'clean'}>{file.extension.toUpperCase()}</em>
+          </button>
+        ))}
+        {files.length === 0 && <div className="empty">请选择文件夹并扫描</div>}
+      </div>
+    </div>
   );
 }
 

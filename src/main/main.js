@@ -7,6 +7,7 @@ const { createFileScanner } = require('../modules/fileScanner');
 const { createTaskManager } = require('../modules/taskManager');
 const { createTaskSync } = require('../modules/taskSync');
 const { createSettingsManager } = require('../modules/settingsManager');
+const aiMarkRemover = require('../modules/aiMarkRemover');
 const { createLogger } = require('../utils/logger');
 
 let mainWindow;
@@ -126,6 +127,14 @@ function registerIpc() {
 
   ipcMain.handle('tasks:thumbnailBatch', async (_event, payload) => (
     taskManager.generateImageThumbnails(payload.files, payload.outputDir, payload.options)
+  ));
+
+  ipcMain.handle('tools:scanAiMarks', async (_event, payload) => (
+    aiMarkRemover.scanFolder(payload.folderPath, payload.options)
+  ));
+
+  ipcMain.handle('tools:removeAiMarks', async (_event, payload) => (
+    aiMarkRemover.processFolder(payload.folderPath, payload.options)
   ));
 
   ipcMain.handle('settings:getAll', () => settingsManager.all());
