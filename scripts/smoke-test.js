@@ -153,13 +153,18 @@ try {
     provider: 'qwen',
     baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
     apiKey: 'test-key',
+    resourceId: 'ep-test-resource',
     textModel: 'qwen-plus',
     visionModel: 'qwen-vl-plus',
     temperature: 0.2,
     maxTokens: 4096,
     enabled: true
   });
-  if (!aiConfig.encryptedApiKey || aiConfigManager.getConfig().apiKey !== 'test-key') {
+  if (
+    !aiConfig.encryptedApiKey
+    || aiConfigManager.getConfig().apiKey !== 'test-key'
+    || aiConfigManager.getConfig().resourceId !== 'ep-test-resource'
+  ) {
     throw new Error('AI config encryption smoke test failed.');
   }
   if (!aiConfigManager.getProviders().some((provider) => provider.value === 'openai')) {

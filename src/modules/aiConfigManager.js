@@ -48,8 +48,10 @@ const PROVIDERS = {
     baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
     textModel: 'doubao-seed-1-6',
     visionModel: 'doubao-vision-pro',
+    resourceId: '',
     modelsPath: '/models',
-    auth: 'bearer'
+    auth: 'bearer',
+    testMode: 'chat'
   },
   hunyuan: {
     label: '腾讯混元',
@@ -97,6 +99,7 @@ function createAiConfigManager(settingsManager, safeStorage) {
       baseUrl: trimTrailingSlash(config.baseUrl || providerDefaults.baseUrl),
       textModel: config.textModel || providerDefaults.textModel,
       visionModel: config.visionModel || providerDefaults.visionModel,
+      resourceId: config.resourceId || '',
       temperature: Number(config.temperature ?? 0.2),
       maxTokens: Number(config.maxTokens ?? 4096),
       encryptedApiKey
@@ -114,6 +117,26 @@ function createAiConfigManager(settingsManager, safeStorage) {
       throw new Error('API Key 不能为空');
     }
     if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+
+    if (provider.testMode === 'chat') {
+      const model = merged.resourceId || merged.textModel;
+      if (!model) throw new Error('资源 ID 或文本模型不能为空');
+      const response = await axios.post(`${trimTrailingSlash(merged.baseUrl)}/chat/completions`, {
+        model,
+        messages: [{ role: 'user', content: 'ping' }],
+        max_tokens: 8,
+        temperature: 0
+      }, {
+        timeout: 20000,
+        headers
+      });
+      return {
+        ok: true,
+        provider: merged.provider,
+        message: `连接成功，模型返回：${response.data?.choices?.[0]?.message?.content || response.data?.id || 'ok'}`,
+        modelCount: 0
+      };
+    }
 
     const response = await axios.get(`${trimTrailingSlash(merged.baseUrl)}${provider.modelsPath}`, {
       timeout: 15000,
@@ -140,6 +163,7 @@ function createAiConfigManager(settingsManager, safeStorage) {
       baseUrl: defaults.baseUrl,
       textModel: defaults.textModel,
       visionModel: defaults.visionModel,
+      resourceId: defaults.resourceId || '',
       temperature: 0.2,
       maxTokens: 4096,
       apiKey: '',

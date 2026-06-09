@@ -95,6 +95,7 @@ function App() {
     provider: 'qwen',
     baseUrl: '',
     apiKey: '',
+    resourceId: '',
     textModel: '',
     visionModel: '',
     temperature: 0.2,
@@ -504,6 +505,7 @@ function App() {
       ...aiConfig,
       provider: providerValue,
       baseUrl: provider?.baseUrl || aiConfig.baseUrl,
+      resourceId: provider?.resourceId || '',
       textModel: provider?.textModel || aiConfig.textModel,
       visionModel: provider?.visionModel || aiConfig.visionModel
     });
@@ -1020,6 +1022,12 @@ function App() {
                   API Key
                   <input type="password" value={aiConfig.apiKey || ''} onChange={(event) => setAiConfig({ ...aiConfig, apiKey: event.target.value })} placeholder={aiConfig.encryptedApiKey ? '已加密保存，输入新 Key 可替换' : '请输入 API Key'} />
                 </label>
+                {aiConfig.provider === 'doubao' && (
+                  <label>
+                    资源 ID
+                    <input value={aiConfig.resourceId || ''} onChange={(event) => setAiConfig({ ...aiConfig, resourceId: event.target.value })} placeholder="火山方舟 Endpoint ID / 资源 ID，测试连接时作为 model 使用" />
+                  </label>
+                )}
                 <div className="splitInputs">
                   <label>
                     文本模型
