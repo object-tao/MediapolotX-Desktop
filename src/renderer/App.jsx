@@ -1254,7 +1254,7 @@ function App() {
                   >
                     <span>
                       <strong>{model.name}</strong>
-                      <small>{providerLabel(aiProviders, model.provider)} / {model.resourceId || model.model}</small>
+                      <small>{providerLabel(aiProviders, model.provider)} / {model.provider === 'doubao' && model.resourceId ? model.resourceId : model.model}</small>
                     </span>
                     <em>{model.enabled ? model.type : 'disabled'}</em>
                     <div className="modelBadges">

@@ -80,8 +80,8 @@ function createAiConfigManager(settingsManager, safeStorage) {
     if (provider.auth !== 'optional' && !apiKey) throw new Error('API Key 不能为空');
     if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
 
-    const modelName = normalized.resourceId || normalized.model;
-    if (!modelName) throw new Error('模型 ID 或资源 ID 不能为空');
+    const modelName = getRequestModelName(normalized);
+    if (!modelName) throw new Error(normalized.provider === 'doubao' ? '模型 ID 或资源 ID 不能为空' : '模型 ID 不能为空');
     try {
       const response = await axios.post(`${trimTrailingSlash(normalized.baseUrl)}/chat/completions`, {
         model: modelName,
@@ -110,7 +110,7 @@ function createAiConfigManager(settingsManager, safeStorage) {
 
     try {
       const response = await axios.post(`${trimTrailingSlash(model.baseUrl)}/chat/completions`, {
-        model: model.resourceId || model.model,
+        model: getRequestModelName(model),
         messages: options.messages,
         temperature: Number(options.temperature ?? model.temperature ?? 0.5),
         max_tokens: Number(options.maxTokens ?? model.maxTokens ?? 4096)
@@ -242,6 +242,11 @@ function getProviderDefaults(provider) {
   return PROVIDERS[provider] || PROVIDERS.compatible;
 }
 
+function getRequestModelName(model) {
+  if (model.provider === 'doubao' && model.resourceId) return model.resourceId;
+  return model.model;
+}
+
 function trimTrailingSlash(value) {
   return String(value || '').replace(/\/+$/, '');
 }
@@ -253,9 +258,13 @@ function formatTestError(error, model) {
     || error.response?.data?.error
     || error.message;
   if (status === 404) {
-    const hint = model.provider === 'doubao'
-      ? '豆包/火山方舟请确认 API Base URL 为 https://ark.cn-beijing.volces.com/api/v3，资源 ID 应使用控制台里的 Endpoint ID，通常以 ep- 开头，不是 API Key。'
-      : '请确认 API Base URL 以 /v1 或供应商兼容路径结尾，并确认模型 ID 正确。';
+    let hint = '请确认 API Base URL 以 /v1 或供应商兼容路径结尾，并确认模型 ID 正确。';
+    if (model.provider === 'doubao') {
+      hint = '豆包/火山方舟请确认 API Base URL 为 https://ark.cn-beijing.volces.com/api/v3，资源 ID 应使用控制台里的 Endpoint ID，通常以 ep- 开头，不是 API Key。';
+    }
+    if (model.provider === 'qwen') {
+      hint = '通义千问请确认 API Base URL 为 https://dashscope.aliyuncs.com/compatible-mode/v1，模型 ID 例如 qwen-plus、qwen-turbo、qwen-max，不要填写资源 ID。';
+    }
     return `接口返回 404：${hint}`;
   }
   if (status === 401 || status === 403) {

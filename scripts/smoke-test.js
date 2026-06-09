@@ -185,6 +185,31 @@ try {
     throw new Error('AI providers smoke test failed.');
   }
 
+  const qwenWithStaleResource = aiConfigManager.saveModel({
+    name: 'Smoke Qwen Stale Resource',
+    provider: 'qwen',
+    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    apiKey: 'test-key',
+    resourceId: 'ep-should-not-be-used',
+    model: 'qwen-plus',
+    type: 'text',
+    enabled: true
+  });
+  let qwenRequestModel = '';
+  const originalAxiosPost = require('axios').post;
+  require('axios').post = async (_url, body) => {
+    qwenRequestModel = body.model;
+    return { data: { choices: [{ message: { content: 'pong' } }] } };
+  };
+  try {
+    await aiConfigManager.testModel(qwenWithStaleResource);
+  } finally {
+    require('axios').post = originalAxiosPost;
+  }
+  if (qwenRequestModel !== 'qwen-plus') {
+    throw new Error('Qwen stale resource ID smoke test failed.');
+  }
+
   const rewriteDir = path.join(tempRoot, 'rewrite-output');
   const rewriteResult = await articleRewriter.rewriteArticle({
     inputText: '海关发布一则测试公告，提醒企业关注申报规范。',
