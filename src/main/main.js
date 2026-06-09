@@ -164,9 +164,15 @@ function registerIpc() {
 
   ipcMain.handle('aiConfig:get', () => aiConfigManager.getConfig());
 
-  ipcMain.handle('aiConfig:save', (_event, payload) => aiConfigManager.saveConfig(payload));
+  ipcMain.handle('aiConfig:saveModel', (_event, payload) => aiConfigManager.saveModel(payload));
 
-  ipcMain.handle('aiConfig:test', async (_event, payload) => aiConfigManager.testConfig(payload));
+  ipcMain.handle('aiConfig:deleteModel', (_event, modelId) => aiConfigManager.deleteModel(modelId));
+
+  ipcMain.handle('aiConfig:setDefault', (_event, payload) => aiConfigManager.setDefault(payload.kind, payload.modelId));
+
+  ipcMain.handle('aiConfig:testModel', async (_event, payload) => aiConfigManager.testModel(payload));
+
+  ipcMain.handle('aiConfig:template', (_event, provider) => aiConfigManager.getModelTemplate(provider));
 
   ipcMain.handle('aiConfig:providers', () => aiConfigManager.getProviders());
 

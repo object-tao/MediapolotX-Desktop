@@ -13,6 +13,10 @@ const imageModes = [
   { value: 'template', label: '模板渲染' }
 ];
 
+function providerLabel(providers, value) {
+  return providers.find((provider) => provider.value === value)?.label || value;
+}
+
 function App() {
   const [appStatus, setAppStatus] = useState(null);
   const [activeView, setActiveView] = useState('library');
@@ -90,17 +94,8 @@ function App() {
   });
   const [wechatResult, setWechatResult] = useState(null);
   const [aiProviders, setAiProviders] = useState([]);
-  const [aiConfig, setAiConfig] = useState({
-    enabled: true,
-    provider: 'qwen',
-    baseUrl: '',
-    apiKey: '',
-    resourceId: '',
-    textModel: '',
-    visionModel: '',
-    temperature: 0.2,
-    maxTokens: 4096
-  });
+  const [aiStore, setAiStore] = useState({ models: [], defaultTextModelId: '', defaultVisionModelId: '' });
+  const [editingAiModel, setEditingAiModel] = useState(null);
   const [aiTestResult, setAiTestResult] = useState(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -139,10 +134,21 @@ function App() {
     setTasks(list);
   }, []);
 
+  const loadAiStore = useCallback(async () => {
+    const store = await window.mediapolotx.aiConfig.get();
+    setAiStore(store);
+    setEditingAiModel((current) => {
+      if (current?.id) {
+        return store.models.find((model) => model.id === current.id) || current;
+      }
+      return store.models[0] || null;
+    });
+  }, []);
+
   useEffect(() => {
     window.mediapolotx.getStatus().then(setAppStatus);
     window.mediapolotx.aiConfig.providers().then(setAiProviders);
-    window.mediapolotx.aiConfig.get().then(setAiConfig);
+    loadAiStore();
     window.mediapolotx.settings.getAll().then((settings) => {
       if (settings.syncOptions) setSyncOptions(settings.syncOptions);
       if (settings.imageOptions) setImageOptions((current) => ({ ...current, ...settings.imageOptions }));
@@ -171,7 +177,7 @@ function App() {
       offAiProgress();
       offDuplicateProgress();
     };
-  }, [loadFiles, refreshStorages, refreshTasks, selectedStorageId]);
+  }, [loadAiStore, loadFiles, refreshStorages, refreshTasks, selectedStorageId]);
 
   async function selectDirectory(setter) {
     const basePath = await window.mediapolotx.selectDirectory();
@@ -468,12 +474,24 @@ function App() {
     }
   }
 
-  async function saveAiConfig() {
+  async function addAiModel(provider = 'qwen') {
+    const template = await window.mediapolotx.aiConfig.template(provider);
+    setEditingAiModel({
+      ...template,
+      name: template.name || '新模型'
+    });
+    setAiTestResult(null);
+  }
+
+  async function saveAiModel() {
+    if (!editingAiModel) return;
     setBusy(true);
     setMessage('正在保存 AI 模型配置...');
     try {
-      const saved = await window.mediapolotx.aiConfig.save(aiConfig);
-      setAiConfig((current) => ({ ...current, encryptedApiKey: saved.encryptedApiKey, apiKey: current.apiKey ? '' : current.apiKey }));
+      const saved = await window.mediapolotx.aiConfig.saveModel(editingAiModel);
+      const store = await window.mediapolotx.aiConfig.get();
+      setAiStore(store);
+      setEditingAiModel(store.models.find((model) => model.id === saved.id) || saved);
       setMessage('AI 模型配置已保存');
     } catch (error) {
       setMessage(`保存失败：${error.message}`);
@@ -482,12 +500,44 @@ function App() {
     }
   }
 
-  async function testAiConfig() {
+  async function deleteAiModel(modelId) {
+    if (!modelId) return;
+    setBusy(true);
+    setMessage('正在删除 AI 模型配置...');
+    try {
+      const store = await window.mediapolotx.aiConfig.deleteModel(modelId);
+      setAiStore(store);
+      setEditingAiModel(store.models[0] || null);
+      setAiTestResult(null);
+      setMessage('AI 模型配置已删除');
+    } catch (error) {
+      setMessage(`删除失败：${error.message}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function setDefaultAiModel(kind, modelId) {
+    if (!modelId) return;
+    setBusy(true);
+    try {
+      const store = await window.mediapolotx.aiConfig.setDefault({ kind, modelId });
+      setAiStore(store);
+      setMessage(kind === 'vision' ? '默认视觉模型已更新' : '默认文本模型已更新');
+    } catch (error) {
+      setMessage(`设置失败：${error.message}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function testAiModel() {
+    if (!editingAiModel) return;
     setBusy(true);
     setAiTestResult(null);
     setMessage('正在测试 AI 模型连接...');
     try {
-      const result = await window.mediapolotx.aiConfig.test(aiConfig);
+      const result = await window.mediapolotx.aiConfig.testModel(editingAiModel);
       setAiTestResult(result);
       setMessage(result.message);
     } catch (error) {
@@ -499,16 +549,20 @@ function App() {
     }
   }
 
-  function applyProvider(providerValue) {
-    const provider = aiProviders.find((item) => item.value === providerValue);
-    setAiConfig({
-      ...aiConfig,
+  async function applyAiProvider(providerValue) {
+    const template = await window.mediapolotx.aiConfig.template(providerValue);
+    setEditingAiModel((current) => ({
+      ...current,
       provider: providerValue,
-      baseUrl: provider?.baseUrl || aiConfig.baseUrl,
-      resourceId: provider?.resourceId || '',
-      textModel: provider?.textModel || aiConfig.textModel,
-      visionModel: provider?.visionModel || aiConfig.visionModel
-    });
+      baseUrl: template.baseUrl,
+      resourceId: template.resourceId || '',
+      model: template.model,
+      name: current?.name || template.name,
+      type: current?.type || template.type,
+      temperature: current?.temperature ?? template.temperature,
+      maxTokens: current?.maxTokens ?? template.maxTokens
+    }));
+    setAiTestResult(null);
   }
 
   async function openPath(targetPath) {
@@ -997,72 +1051,113 @@ function App() {
         {activeView === 'aiModelConfig' && (
           <section className="contentGrid">
             <div className="panel">
-              <h2>AI模型配置</h2>
-              <div className="toolIntro">
-                <p>配置后续 AI 功能共用的模型服务。API Key 使用 Electron safeStorage 加密后保存到本机 SQLite。</p>
+              <div className="panelHeader">
+                <h2>AI模型列表</h2>
+                <button type="button" onClick={() => addAiModel('qwen')}>新增模型</button>
               </div>
-              <div className="form">
-                <label className="inlineCheck">
-                  <input type="checkbox" checked={aiConfig.enabled} onChange={(event) => setAiConfig({ ...aiConfig, enabled: event.target.checked })} />
-                  启用 AI 功能
-                </label>
-                <label>
-                  模型供应商
-                  <select value={aiConfig.provider} onChange={(event) => applyProvider(event.target.value)}>
-                    {aiProviders.map((provider) => (
-                      <option key={provider.value} value={provider.value}>{provider.label}</option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  API Base URL
-                  <input value={aiConfig.baseUrl} onChange={(event) => setAiConfig({ ...aiConfig, baseUrl: event.target.value })} />
-                </label>
-                <label>
-                  API Key
-                  <input type="password" value={aiConfig.apiKey || ''} onChange={(event) => setAiConfig({ ...aiConfig, apiKey: event.target.value })} placeholder={aiConfig.encryptedApiKey ? '已加密保存，输入新 Key 可替换' : '请输入 API Key'} />
-                </label>
-                {aiConfig.provider === 'doubao' && (
-                  <label>
-                    资源 ID
-                    <input value={aiConfig.resourceId || ''} onChange={(event) => setAiConfig({ ...aiConfig, resourceId: event.target.value })} placeholder="火山方舟 Endpoint ID / 资源 ID，测试连接时作为 model 使用" />
-                  </label>
-                )}
-                <div className="splitInputs">
-                  <label>
-                    文本模型
-                    <input value={aiConfig.textModel} onChange={(event) => setAiConfig({ ...aiConfig, textModel: event.target.value })} />
-                  </label>
-                  <label>
-                    视觉模型
-                    <input value={aiConfig.visionModel} onChange={(event) => setAiConfig({ ...aiConfig, visionModel: event.target.value })} />
-                  </label>
-                </div>
-                <div className="splitInputs">
-                  <label>
-                    Temperature
-                    <input type="number" min="0" max="2" step="0.1" value={aiConfig.temperature} onChange={(event) => setAiConfig({ ...aiConfig, temperature: event.target.value })} />
-                  </label>
-                  <label>
-                    Max Tokens
-                    <input type="number" min="256" max="200000" step="256" value={aiConfig.maxTokens} onChange={(event) => setAiConfig({ ...aiConfig, maxTokens: event.target.value })} />
-                  </label>
-                </div>
-                <div className="actions">
-                  <button onClick={saveAiConfig} disabled={busy}>保存配置</button>
-                  <button onClick={testAiConfig} disabled={busy}>测试连接</button>
-                </div>
+              <div className="toolIntro">
+                <p>可保存多个文本或视觉模型。API Key 使用 Electron safeStorage 加密后保存到本机 SQLite。</p>
+              </div>
+              <div className="modelList">
+                {aiStore.models.map((model) => (
+                  <button
+                    type="button"
+                    key={model.id}
+                    className={`modelItem ${editingAiModel?.id === model.id ? 'selected' : ''}`}
+                    onClick={() => {
+                      setEditingAiModel(model);
+                      setAiTestResult(null);
+                    }}
+                  >
+                    <span>
+                      <strong>{model.name}</strong>
+                      <small>{providerLabel(aiProviders, model.provider)} / {model.resourceId || model.model}</small>
+                    </span>
+                    <em>{model.enabled ? model.type : 'disabled'}</em>
+                    <div className="modelBadges">
+                      {aiStore.defaultTextModelId === model.id && <small>默认文本</small>}
+                      {aiStore.defaultVisionModelId === model.id && <small>默认视觉</small>}
+                      {model.hasApiKey && <small>已保存 Key</small>}
+                    </div>
+                  </button>
+                ))}
+                {aiStore.models.length === 0 && <div className="empty">暂无模型，请新增后保存。</div>}
               </div>
             </div>
             <div className="panel">
-              <h2>连接状态</h2>
-              {aiTestResult ? (
-                <div className={`statusBox ${aiTestResult.ok ? 'success' : 'failed'}`}>
-                  <strong>{aiTestResult.ok ? '连接成功' : '连接失败'}</strong>
-                  <span>{aiTestResult.message}</span>
+              <h2>编辑模型</h2>
+              {editingAiModel ? (
+                <div className="form">
+                  <label>
+                    配置名称
+                    <input value={editingAiModel.name || ''} onChange={(event) => setEditingAiModel({ ...editingAiModel, name: event.target.value })} />
+                  </label>
+                  <label className="inlineCheck">
+                    <input type="checkbox" checked={editingAiModel.enabled !== false} onChange={(event) => setEditingAiModel({ ...editingAiModel, enabled: event.target.checked })} />
+                    启用此模型
+                  </label>
+                  <label>
+                    模型供应商
+                    <select value={editingAiModel.provider} onChange={(event) => applyAiProvider(event.target.value)}>
+                      {aiProviders.map((provider) => (
+                        <option key={provider.value} value={provider.value}>{provider.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    API Base URL
+                    <input value={editingAiModel.baseUrl || ''} onChange={(event) => setEditingAiModel({ ...editingAiModel, baseUrl: event.target.value })} />
+                  </label>
+                  <label>
+                    API Key
+                    <input type="password" value={editingAiModel.apiKey || ''} onChange={(event) => setEditingAiModel({ ...editingAiModel, apiKey: event.target.value })} placeholder={editingAiModel.hasApiKey ? '已加密保存，输入新 Key 可替换' : '请输入 API Key'} />
+                  </label>
+                  {editingAiModel.provider === 'doubao' && (
+                    <label>
+                      资源 ID
+                      <input value={editingAiModel.resourceId || ''} onChange={(event) => setEditingAiModel({ ...editingAiModel, resourceId: event.target.value })} placeholder="火山方舟 Endpoint ID / 资源 ID，例如 ep-xxxxxxxx" />
+                    </label>
+                  )}
+                  <div className="splitInputs">
+                    <label>
+                      模型 ID
+                      <input value={editingAiModel.model || ''} onChange={(event) => setEditingAiModel({ ...editingAiModel, model: event.target.value })} />
+                    </label>
+                    <label>
+                      用途
+                      <select value={editingAiModel.type || 'both'} onChange={(event) => setEditingAiModel({ ...editingAiModel, type: event.target.value })}>
+                        <option value="both">文本 + 视觉</option>
+                        <option value="text">仅文本</option>
+                        <option value="vision">仅视觉</option>
+                      </select>
+                    </label>
+                  </div>
+                  <div className="splitInputs">
+                    <label>
+                      Temperature
+                      <input type="number" min="0" max="2" step="0.1" value={editingAiModel.temperature} onChange={(event) => setEditingAiModel({ ...editingAiModel, temperature: event.target.value })} />
+                    </label>
+                    <label>
+                      Max Tokens
+                      <input type="number" min="256" max="200000" step="256" value={editingAiModel.maxTokens} onChange={(event) => setEditingAiModel({ ...editingAiModel, maxTokens: event.target.value })} />
+                    </label>
+                  </div>
+                  <div className="actions actionWrap">
+                    <button onClick={saveAiModel} disabled={busy}>保存模型</button>
+                    <button onClick={testAiModel} disabled={busy}>测试连接</button>
+                    <button type="button" onClick={() => setDefaultAiModel('text', editingAiModel.id)} disabled={busy || !editingAiModel.id}>设为默认文本</button>
+                    <button type="button" onClick={() => setDefaultAiModel('vision', editingAiModel.id)} disabled={busy || !editingAiModel.id}>设为默认视觉</button>
+                    <button type="button" className="dangerButton" onClick={() => deleteAiModel(editingAiModel.id)} disabled={busy || !editingAiModel.id}>删除</button>
+                  </div>
+                  {aiTestResult && (
+                    <div className={`statusBox ${aiTestResult.ok ? 'success' : 'failed'}`}>
+                      <strong>{aiTestResult.ok ? '连接成功' : '连接失败'}</strong>
+                      <span>{aiTestResult.message}</span>
+                    </div>
+                  )}
                 </div>
               ) : (
-                <div className="empty">保存后可测试连接</div>
+                <div className="empty">请选择或新增一个模型。</div>
               )}
               <div className="toolIntro">
                 <p>国内供应商默认包含通义千问、DeepSeek、智谱 GLM、豆包/火山方舟、腾讯混元，也支持 OpenAI、Gemini、Ollama 和 OpenAI Compatible 接口。</p>

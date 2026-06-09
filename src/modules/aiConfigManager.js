@@ -1,151 +1,103 @@
+const { randomUUID } = require('node:crypto');
 const axios = require('axios');
 
 const SETTING_KEY = 'aiModelConfig';
 
 const PROVIDERS = {
-  openai: {
-    label: 'OpenAI',
-    baseUrl: 'https://api.openai.com/v1',
-    textModel: 'gpt-4.1-mini',
-    visionModel: 'gpt-4o-mini',
-    modelsPath: '/models',
-    auth: 'bearer'
-  },
-  gemini: {
-    label: 'Gemini',
-    baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
-    textModel: 'gemini-2.0-flash',
-    visionModel: 'gemini-2.0-flash',
-    modelsPath: '/models',
-    auth: 'bearer'
-  },
-  qwen: {
-    label: '通义千问',
-    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-    textModel: 'qwen-plus',
-    visionModel: 'qwen-vl-plus',
-    modelsPath: '/models',
-    auth: 'bearer'
-  },
-  deepseek: {
-    label: 'DeepSeek',
-    baseUrl: 'https://api.deepseek.com/v1',
-    textModel: 'deepseek-chat',
-    visionModel: 'deepseek-chat',
-    modelsPath: '/models',
-    auth: 'bearer'
-  },
-  zhipu: {
-    label: '智谱 GLM',
-    baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
-    textModel: 'glm-4-flash',
-    visionModel: 'glm-4v-flash',
-    modelsPath: '/models',
-    auth: 'bearer'
-  },
-  doubao: {
-    label: '豆包/火山方舟',
-    baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
-    textModel: 'doubao-seed-1-6',
-    visionModel: 'doubao-vision-pro',
-    resourceId: '',
-    modelsPath: '/models',
-    auth: 'bearer',
-    testMode: 'chat'
-  },
-  hunyuan: {
-    label: '腾讯混元',
-    baseUrl: 'https://api.hunyuan.cloud.tencent.com/v1',
-    textModel: 'hunyuan-turbos-latest',
-    visionModel: 'hunyuan-vision',
-    modelsPath: '/models',
-    auth: 'bearer'
-  },
-  ollama: {
-    label: 'Ollama',
-    baseUrl: 'http://127.0.0.1:11434/v1',
-    textModel: 'qwen2.5',
-    visionModel: 'llava',
-    modelsPath: '/models',
-    auth: 'optional'
-  },
-  compatible: {
-    label: 'OpenAI Compatible',
-    baseUrl: 'https://api.example.com/v1',
-    textModel: 'model-name',
-    visionModel: 'vision-model-name',
-    modelsPath: '/models',
-    auth: 'bearer'
-  }
+  openai: { label: 'OpenAI', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4.1-mini', visionModel: 'gpt-4o-mini', auth: 'bearer' },
+  gemini: { label: 'Gemini', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-2.0-flash', visionModel: 'gemini-2.0-flash', auth: 'bearer' },
+  qwen: { label: '通义千问', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-plus', visionModel: 'qwen-vl-plus', auth: 'bearer' },
+  deepseek: { label: 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-chat', visionModel: 'deepseek-chat', auth: 'bearer' },
+  zhipu: { label: '智谱 GLM', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4-flash', visionModel: 'glm-4v-flash', auth: 'bearer' },
+  doubao: { label: '豆包/火山方舟', baseUrl: 'https://ark.cn-beijing.volces.com/api/v3', model: 'doubao-seed-1-6', visionModel: 'doubao-vision-pro', resourceId: '', auth: 'bearer', testMode: 'chat' },
+  hunyuan: { label: '腾讯混元', baseUrl: 'https://api.hunyuan.cloud.tencent.com/v1', model: 'hunyuan-turbos-latest', visionModel: 'hunyuan-vision', auth: 'bearer' },
+  ollama: { label: 'Ollama', baseUrl: 'http://127.0.0.1:11434/v1', model: 'qwen2.5', visionModel: 'llava', auth: 'optional' },
+  compatible: { label: 'OpenAI Compatible', baseUrl: 'https://api.example.com/v1', model: 'model-name', visionModel: 'vision-model-name', auth: 'bearer' }
 };
 
 function createAiConfigManager(settingsManager, safeStorage) {
   function getConfig() {
-    const stored = settingsManager.get(SETTING_KEY, null);
-    if (!stored) return getDefaultConfig();
+    const stored = normalizeStore(settingsManager.get(SETTING_KEY, null));
     return {
-      ...getDefaultConfig(stored.provider),
       ...stored,
-      apiKey: decryptApiKey(stored.encryptedApiKey)
+      models: stored.models.map(maskModel)
     };
   }
 
-  function saveConfig(config) {
-    const providerDefaults = getProviderDefaults(config.provider);
-    const encryptedApiKey = config.apiKey ? encryptApiKey(config.apiKey) : config.encryptedApiKey || '';
-    const stored = {
-      enabled: Boolean(config.enabled),
-      provider: config.provider || 'qwen',
-      baseUrl: trimTrailingSlash(config.baseUrl || providerDefaults.baseUrl),
-      textModel: config.textModel || providerDefaults.textModel,
-      visionModel: config.visionModel || providerDefaults.visionModel,
-      resourceId: config.resourceId || '',
-      temperature: Number(config.temperature ?? 0.2),
-      maxTokens: Number(config.maxTokens ?? 4096),
+  function saveModel(model) {
+    const store = normalizeStore(settingsManager.get(SETTING_KEY, null));
+    const normalized = normalizeModel(model);
+    const existing = store.models.find((item) => item.id === normalized.id);
+    const encryptedApiKey = normalized.apiKey
+      ? encryptApiKey(normalized.apiKey)
+      : existing?.encryptedApiKey || normalized.encryptedApiKey || '';
+    const savedModel = {
+      ...normalized,
       encryptedApiKey
     };
-    settingsManager.set(SETTING_KEY, stored);
-    return { ...stored, apiKey: encryptedApiKey ? '********' : '' };
+    delete savedModel.apiKey;
+
+    const index = store.models.findIndex((item) => item.id === savedModel.id);
+    if (index >= 0) store.models[index] = savedModel;
+    else store.models.push(savedModel);
+
+    if (!store.defaultTextModelId && savedModel.enabled && ['text', 'both'].includes(savedModel.type)) {
+      store.defaultTextModelId = savedModel.id;
+    }
+    if (!store.defaultVisionModelId && savedModel.enabled && ['vision', 'both'].includes(savedModel.type)) {
+      store.defaultVisionModelId = savedModel.id;
+    }
+
+    persistStore(store);
+    return maskModel(savedModel);
   }
 
-  async function testConfig(config) {
-    const merged = { ...getDefaultConfig(config.provider), ...config };
-    const provider = getProviderDefaults(merged.provider);
-    const apiKey = merged.apiKey || decryptApiKey(merged.encryptedApiKey);
-    const headers = {};
-    if (provider.auth !== 'optional' && !apiKey) {
-      throw new Error('API Key 不能为空');
-    }
+  function deleteModel(modelId) {
+    const store = normalizeStore(settingsManager.get(SETTING_KEY, null));
+    store.models = store.models.filter((model) => model.id !== modelId);
+    if (store.defaultTextModelId === modelId) store.defaultTextModelId = '';
+    if (store.defaultVisionModelId === modelId) store.defaultVisionModelId = '';
+    persistStore(store);
+    return getConfig();
+  }
+
+  function setDefault(kind, modelId) {
+    const store = normalizeStore(settingsManager.get(SETTING_KEY, null));
+    if (!store.models.some((model) => model.id === modelId)) throw new Error('模型不存在');
+    if (kind === 'vision') store.defaultVisionModelId = modelId;
+    else store.defaultTextModelId = modelId;
+    persistStore(store);
+    return getConfig();
+  }
+
+  async function testModel(model) {
+    const normalized = normalizeModel(model);
+    const store = normalizeStore(settingsManager.get(SETTING_KEY, null));
+    const existing = store.models.find((item) => item.id === normalized.id);
+    const provider = getProviderDefaults(normalized.provider);
+    const apiKey = normalized.apiKey || decryptApiKey(normalized.encryptedApiKey || existing?.encryptedApiKey);
+    const headers = { 'Content-Type': 'application/json' };
+    if (provider.auth !== 'optional' && !apiKey) throw new Error('API Key 不能为空');
     if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
 
-    if (provider.testMode === 'chat') {
-      const model = merged.resourceId || merged.textModel;
-      if (!model) throw new Error('资源 ID 或文本模型不能为空');
-      const response = await axios.post(`${trimTrailingSlash(merged.baseUrl)}/chat/completions`, {
-        model,
+    const modelName = normalized.resourceId || normalized.model;
+    if (provider.testMode === 'chat' || normalized.resourceId) {
+      const response = await axios.post(`${trimTrailingSlash(normalized.baseUrl)}/chat/completions`, {
+        model: modelName,
         messages: [{ role: 'user', content: 'ping' }],
         max_tokens: 8,
         temperature: 0
-      }, {
-        timeout: 20000,
-        headers
-      });
+      }, { timeout: 20000, headers });
       return {
         ok: true,
-        provider: merged.provider,
-        message: `连接成功，模型返回：${response.data?.choices?.[0]?.message?.content || response.data?.id || 'ok'}`,
-        modelCount: 0
+        message: `连接成功，模型返回：${response.data?.choices?.[0]?.message?.content || response.data?.id || 'ok'}`
       };
     }
 
-    const response = await axios.get(`${trimTrailingSlash(merged.baseUrl)}${provider.modelsPath}`, {
-      timeout: 15000,
-      headers
-    });
+    const response = await axios.get(`${trimTrailingSlash(normalized.baseUrl)}/models`, { timeout: 15000, headers });
     const modelCount = Array.isArray(response.data?.data) ? response.data.data.length : 0;
     return {
       ok: true,
-      provider: merged.provider,
       message: `连接成功${modelCount ? `，发现 ${modelCount} 个模型` : ''}`,
       modelCount
     };
@@ -155,20 +107,17 @@ function createAiConfigManager(settingsManager, safeStorage) {
     return Object.entries(PROVIDERS).map(([value, provider]) => ({ value, ...provider }));
   }
 
-  function getDefaultConfig(provider = 'qwen') {
-    const defaults = getProviderDefaults(provider);
-    return {
-      enabled: true,
-      provider,
-      baseUrl: defaults.baseUrl,
-      textModel: defaults.textModel,
-      visionModel: defaults.visionModel,
-      resourceId: defaults.resourceId || '',
-      temperature: 0.2,
-      maxTokens: 4096,
-      apiKey: '',
-      encryptedApiKey: ''
-    };
+  function getModelTemplate(provider = 'qwen') {
+    return maskModel(normalizeModel({ provider }));
+  }
+
+  function persistStore(store) {
+    settingsManager.set(SETTING_KEY, {
+      version: 2,
+      models: store.models,
+      defaultTextModelId: store.defaultTextModelId || '',
+      defaultVisionModelId: store.defaultVisionModelId || ''
+    });
   }
 
   function encryptApiKey(apiKey) {
@@ -179,8 +128,7 @@ function createAiConfigManager(settingsManager, safeStorage) {
   }
 
   function decryptApiKey(encryptedApiKey) {
-    if (!encryptedApiKey) return '';
-    if (!safeStorage.isEncryptionAvailable()) return '';
+    if (!encryptedApiKey || !safeStorage.isEncryptionAvailable()) return '';
     try {
       return safeStorage.decryptString(Buffer.from(encryptedApiKey, 'base64'));
     } catch {
@@ -190,10 +138,71 @@ function createAiConfigManager(settingsManager, safeStorage) {
 
   return {
     getConfig,
-    saveConfig,
-    testConfig,
+    saveModel,
+    deleteModel,
+    setDefault,
+    testModel,
     getProviders,
-    getDefaultConfig
+    getModelTemplate
+  };
+}
+
+function normalizeStore(stored) {
+  if (!stored) return { version: 2, models: [], defaultTextModelId: '', defaultVisionModelId: '' };
+  if (Array.isArray(stored.models)) {
+    return {
+      version: 2,
+      models: stored.models.map(normalizeModel),
+      defaultTextModelId: stored.defaultTextModelId || '',
+      defaultVisionModelId: stored.defaultVisionModelId || ''
+    };
+  }
+
+  const migrated = normalizeModel({
+    name: `${getProviderDefaults(stored.provider).label} 默认模型`,
+    provider: stored.provider,
+    baseUrl: stored.baseUrl,
+    encryptedApiKey: stored.encryptedApiKey,
+    resourceId: stored.resourceId,
+    model: stored.textModel,
+    type: 'both',
+    temperature: stored.temperature,
+    maxTokens: stored.maxTokens,
+    enabled: stored.enabled
+  });
+  return {
+    version: 2,
+    models: [migrated],
+    defaultTextModelId: migrated.id,
+    defaultVisionModelId: migrated.id
+  };
+}
+
+function normalizeModel(model = {}) {
+  const provider = model.provider || 'qwen';
+  const defaults = getProviderDefaults(provider);
+  return {
+    id: model.id || randomUUID(),
+    name: model.name || `${defaults.label} ${model.model || defaults.model}`,
+    provider,
+    baseUrl: trimTrailingSlash(model.baseUrl || defaults.baseUrl),
+    encryptedApiKey: model.encryptedApiKey || '',
+    apiKey: model.apiKey || '',
+    resourceId: model.resourceId || defaults.resourceId || '',
+    model: model.model || defaults.model,
+    type: model.type || 'both',
+    temperature: Number(model.temperature ?? 0.2),
+    maxTokens: Number(model.maxTokens ?? 4096),
+    enabled: model.enabled !== false
+  };
+}
+
+function maskModel(model) {
+  const { encryptedApiKey, ...safeModel } = model;
+  return {
+    ...safeModel,
+    apiKey: '',
+    hasApiKey: Boolean(encryptedApiKey)
   };
 }
 

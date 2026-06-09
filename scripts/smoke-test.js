@@ -149,23 +149,36 @@ try {
     decryptString: (buffer) => buffer.toString().replace(/^encrypted:/, '')
   };
   const aiConfigManager = createAiConfigManager(settingsManager, safeStorageMock);
-  const aiConfig = aiConfigManager.saveConfig({
+  const savedAiModel = aiConfigManager.saveModel({
+    name: 'Smoke Qwen',
     provider: 'qwen',
     baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
     apiKey: 'test-key',
     resourceId: 'ep-test-resource',
-    textModel: 'qwen-plus',
-    visionModel: 'qwen-vl-plus',
+    model: 'qwen-plus',
+    type: 'both',
     temperature: 0.2,
     maxTokens: 4096,
     enabled: true
   });
+  const storedAiConfig = settingsManager.get('aiModelConfig');
+  const listedAiConfig = aiConfigManager.getConfig();
   if (
-    !aiConfig.encryptedApiKey
-    || aiConfigManager.getConfig().apiKey !== 'test-key'
-    || aiConfigManager.getConfig().resourceId !== 'ep-test-resource'
+    !storedAiConfig.models[0].encryptedApiKey
+    || listedAiConfig.models.length !== 1
+    || listedAiConfig.models[0].apiKey !== ''
+    || listedAiConfig.models[0].hasApiKey !== true
+    || listedAiConfig.models[0].resourceId !== 'ep-test-resource'
   ) {
     throw new Error('AI config encryption smoke test failed.');
+  }
+  const defaultStore = aiConfigManager.setDefault('vision', savedAiModel.id);
+  if (defaultStore.defaultTextModelId !== savedAiModel.id || defaultStore.defaultVisionModelId !== savedAiModel.id) {
+    throw new Error('AI config default model smoke test failed.');
+  }
+  const deletedStore = aiConfigManager.deleteModel(savedAiModel.id);
+  if (deletedStore.models.length !== 0) {
+    throw new Error('AI config delete model smoke test failed.');
   }
   if (!aiConfigManager.getProviders().some((provider) => provider.value === 'openai')) {
     throw new Error('AI providers smoke test failed.');
