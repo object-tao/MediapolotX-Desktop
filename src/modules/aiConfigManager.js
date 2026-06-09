@@ -81,7 +81,8 @@ function createAiConfigManager(settingsManager, safeStorage) {
     if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
 
     const modelName = normalized.resourceId || normalized.model;
-    if (provider.testMode === 'chat' || normalized.resourceId) {
+    if (!modelName) throw new Error('模型 ID 或资源 ID 不能为空');
+    try {
       const response = await axios.post(`${trimTrailingSlash(normalized.baseUrl)}/chat/completions`, {
         model: modelName,
         messages: [{ role: 'user', content: 'ping' }],
@@ -92,15 +93,9 @@ function createAiConfigManager(settingsManager, safeStorage) {
         ok: true,
         message: `连接成功，模型返回：${response.data?.choices?.[0]?.message?.content || response.data?.id || 'ok'}`
       };
+    } catch (error) {
+      throw new Error(formatTestError(error, normalized));
     }
-
-    const response = await axios.get(`${trimTrailingSlash(normalized.baseUrl)}/models`, { timeout: 15000, headers });
-    const modelCount = Array.isArray(response.data?.data) ? response.data.data.length : 0;
-    return {
-      ok: true,
-      message: `连接成功${modelCount ? `，发现 ${modelCount} 个模型` : ''}`,
-      modelCount
-    };
   }
 
   function getProviders() {
@@ -212,6 +207,27 @@ function getProviderDefaults(provider) {
 
 function trimTrailingSlash(value) {
   return String(value || '').replace(/\/+$/, '');
+}
+
+function formatTestError(error, model) {
+  const status = error.response?.status;
+  const remoteMessage = error.response?.data?.error?.message
+    || error.response?.data?.message
+    || error.response?.data?.error
+    || error.message;
+  if (status === 404) {
+    const hint = model.provider === 'doubao'
+      ? '豆包/火山方舟请确认 API Base URL 为 https://ark.cn-beijing.volces.com/api/v3，资源 ID 应使用控制台里的 Endpoint ID，通常以 ep- 开头，不是 API Key。'
+      : '请确认 API Base URL 以 /v1 或供应商兼容路径结尾，并确认模型 ID 正确。';
+    return `接口返回 404：${hint}`;
+  }
+  if (status === 401 || status === 403) {
+    return `鉴权失败 ${status}：请检查 API Key 是否正确、是否有该模型权限。`;
+  }
+  if (status) {
+    return `接口返回 ${status}：${remoteMessage}`;
+  }
+  return `连接失败：${remoteMessage}`;
 }
 
 module.exports = {

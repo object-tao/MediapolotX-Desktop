@@ -17,6 +17,10 @@ function providerLabel(providers, value) {
   return providers.find((provider) => provider.value === value)?.label || value;
 }
 
+function cleanRemoteError(error) {
+  return String(error?.message || error || '').replace(/^Error invoking remote method '[^']+':\s*/, '');
+}
+
 function App() {
   const [appStatus, setAppStatus] = useState(null);
   const [activeView, setActiveView] = useState('library');
@@ -494,7 +498,7 @@ function App() {
       setEditingAiModel(store.models.find((model) => model.id === saved.id) || saved);
       setMessage('AI 模型配置已保存');
     } catch (error) {
-      setMessage(`保存失败：${error.message}`);
+      setMessage(`保存失败：${cleanRemoteError(error)}`);
     } finally {
       setBusy(false);
     }
@@ -511,7 +515,7 @@ function App() {
       setAiTestResult(null);
       setMessage('AI 模型配置已删除');
     } catch (error) {
-      setMessage(`删除失败：${error.message}`);
+      setMessage(`删除失败：${cleanRemoteError(error)}`);
     } finally {
       setBusy(false);
     }
@@ -525,7 +529,7 @@ function App() {
       setAiStore(store);
       setMessage(kind === 'vision' ? '默认视觉模型已更新' : '默认文本模型已更新');
     } catch (error) {
-      setMessage(`设置失败：${error.message}`);
+      setMessage(`设置失败：${cleanRemoteError(error)}`);
     } finally {
       setBusy(false);
     }
@@ -541,9 +545,10 @@ function App() {
       setAiTestResult(result);
       setMessage(result.message);
     } catch (error) {
-      const result = { ok: false, message: error.message };
+      const errorMessage = cleanRemoteError(error);
+      const result = { ok: false, message: errorMessage };
       setAiTestResult(result);
-      setMessage(`测试失败：${error.message}`);
+      setMessage(`测试失败：${errorMessage}`);
     } finally {
       setBusy(false);
     }
