@@ -1,5 +1,5 @@
 const path = require('node:path');
-const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, shell, safeStorage } = require('electron');
 const config = require('../config/default');
 const { createDatabase } = require('../modules/db');
 const { createStorageManager } = require('../modules/storageManager');
@@ -10,6 +10,7 @@ const { createSettingsManager } = require('../modules/settingsManager');
 const aiMarkRemover = require('../modules/aiMarkRemover');
 const imageDuplicator = require('../modules/imageDuplicator');
 const wechatMpMarkdown = require('../modules/wechatMpMarkdown');
+const { createAiConfigManager } = require('../modules/aiConfigManager');
 const { createLogger } = require('../utils/logger');
 
 let mainWindow;
@@ -18,6 +19,7 @@ let storageManager;
 let fileScanner;
 let taskManager;
 let settingsManager;
+let aiConfigManager;
 let logger;
 const watchers = new Map();
 
@@ -52,6 +54,7 @@ async function bootstrapServices() {
   fileScanner = createFileScanner(db, logger);
   taskManager = createTaskManager(db, logger, fileScanner);
   settingsManager = createSettingsManager(db);
+  aiConfigManager = createAiConfigManager(settingsManager, safeStorage);
 }
 
 function registerIpc() {
@@ -158,6 +161,14 @@ function registerIpc() {
   ipcMain.handle('settings:getAll', () => settingsManager.all());
 
   ipcMain.handle('settings:set', (_event, payload) => settingsManager.set(payload.key, payload.value));
+
+  ipcMain.handle('aiConfig:get', () => aiConfigManager.getConfig());
+
+  ipcMain.handle('aiConfig:save', (_event, payload) => aiConfigManager.saveConfig(payload));
+
+  ipcMain.handle('aiConfig:test', async (_event, payload) => aiConfigManager.testConfig(payload));
+
+  ipcMain.handle('aiConfig:providers', () => aiConfigManager.getProviders());
 
   ipcMain.handle('sync:fetchQueue', async (_event, payload = {}) => {
     const sync = createTaskSync(payload);

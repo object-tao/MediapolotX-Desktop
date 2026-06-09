@@ -544,6 +544,39 @@ select {
   overflow-wrap: anywhere;
 }
 
+.inlineCheck {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.inlineCheck input {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+}
+
+.statusBox {
+  display: grid;
+  gap: 8px;
+  border-radius: 8px;
+  padding: 14px;
+  margin-bottom: 16px;
+  overflow-wrap: anywhere;
+}
+
+.statusBox.success {
+  border: 1px solid #bce8d2;
+  background: #effaf5;
+  color: #176642;
+}
+
+.statusBox.failed {
+  border: 1px solid #ffd2c2;
+  background: #fff4ef;
+  color: #9b3a1b;
+}
+
 .metrics {
   display: grid;
   grid-template-columns: 1fr 1fr;

@@ -10,6 +10,7 @@ const { createTaskManager } = require('../src/modules/taskManager');
 const aiMarkRemover = require('../src/modules/aiMarkRemover');
 const imageDuplicator = require('../src/modules/imageDuplicator');
 const wechatMpMarkdown = require('../src/modules/wechatMpMarkdown');
+const { createAiConfigManager } = require('../src/modules/aiConfigManager');
 
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mediapolotx-smoke-'));
 const dbPath = path.join(tempRoot, 'smoke.sqlite');
@@ -140,6 +141,29 @@ try {
     || wechatMpMarkdown.sanitizeFilename('a/b:c') !== 'a_b_c'
   ) {
     throw new Error('Wechat markdown smoke test failed.');
+  }
+
+  const safeStorageMock = {
+    isEncryptionAvailable: () => true,
+    encryptString: (value) => Buffer.from(`encrypted:${value}`),
+    decryptString: (buffer) => buffer.toString().replace(/^encrypted:/, '')
+  };
+  const aiConfigManager = createAiConfigManager(settingsManager, safeStorageMock);
+  const aiConfig = aiConfigManager.saveConfig({
+    provider: 'qwen',
+    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    apiKey: 'test-key',
+    textModel: 'qwen-plus',
+    visionModel: 'qwen-vl-plus',
+    temperature: 0.2,
+    maxTokens: 4096,
+    enabled: true
+  });
+  if (!aiConfig.encryptedApiKey || aiConfigManager.getConfig().apiKey !== 'test-key') {
+    throw new Error('AI config encryption smoke test failed.');
+  }
+  if (!aiConfigManager.getProviders().some((provider) => provider.value === 'openai')) {
+    throw new Error('AI providers smoke test failed.');
   }
 
   db.close();

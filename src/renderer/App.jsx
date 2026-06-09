@@ -89,6 +89,18 @@ function App() {
     imageMode: 'save'
   });
   const [wechatResult, setWechatResult] = useState(null);
+  const [aiProviders, setAiProviders] = useState([]);
+  const [aiConfig, setAiConfig] = useState({
+    enabled: true,
+    provider: 'qwen',
+    baseUrl: '',
+    apiKey: '',
+    textModel: '',
+    visionModel: '',
+    temperature: 0.2,
+    maxTokens: 4096
+  });
+  const [aiTestResult, setAiTestResult] = useState(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -128,6 +140,8 @@ function App() {
 
   useEffect(() => {
     window.mediapolotx.getStatus().then(setAppStatus);
+    window.mediapolotx.aiConfig.providers().then(setAiProviders);
+    window.mediapolotx.aiConfig.get().then(setAiConfig);
     window.mediapolotx.settings.getAll().then((settings) => {
       if (settings.syncOptions) setSyncOptions(settings.syncOptions);
       if (settings.imageOptions) setImageOptions((current) => ({ ...current, ...settings.imageOptions }));
@@ -453,6 +467,48 @@ function App() {
     }
   }
 
+  async function saveAiConfig() {
+    setBusy(true);
+    setMessage('正在保存 AI 模型配置...');
+    try {
+      const saved = await window.mediapolotx.aiConfig.save(aiConfig);
+      setAiConfig((current) => ({ ...current, encryptedApiKey: saved.encryptedApiKey, apiKey: current.apiKey ? '' : current.apiKey }));
+      setMessage('AI 模型配置已保存');
+    } catch (error) {
+      setMessage(`保存失败：${error.message}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function testAiConfig() {
+    setBusy(true);
+    setAiTestResult(null);
+    setMessage('正在测试 AI 模型连接...');
+    try {
+      const result = await window.mediapolotx.aiConfig.test(aiConfig);
+      setAiTestResult(result);
+      setMessage(result.message);
+    } catch (error) {
+      const result = { ok: false, message: error.message };
+      setAiTestResult(result);
+      setMessage(`测试失败：${error.message}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function applyProvider(providerValue) {
+    const provider = aiProviders.find((item) => item.value === providerValue);
+    setAiConfig({
+      ...aiConfig,
+      provider: providerValue,
+      baseUrl: provider?.baseUrl || aiConfig.baseUrl,
+      textModel: provider?.textModel || aiConfig.textModel,
+      visionModel: provider?.visionModel || aiConfig.visionModel
+    });
+  }
+
   async function openPath(targetPath) {
     const result = await window.mediapolotx.openPath(targetPath);
     if (!result.opened) setMessage(result.errorMessage || '无法打开路径');
@@ -504,6 +560,10 @@ function App() {
             <button className={`navItem subItem ${activeView === 'removeAiMark' ? 'active' : ''}`} onClick={() => setActiveView('removeAiMark')}>去AI标识</button>
             <button className={`navItem subItem ${activeView === 'imageDuplicate' ? 'active' : ''}`} onClick={() => setActiveView('imageDuplicate')}>图片复制</button>
             <button className={`navItem subItem ${activeView === 'wechatMarkdown' ? 'active' : ''}`} onClick={() => setActiveView('wechatMarkdown')}>公众号转MD</button>
+          </div>
+          <div className="navGroup">
+            <div className="navGroupTitle">基础配置</div>
+            <button className={`navItem subItem ${activeView === 'aiModelConfig' ? 'active' : ''}`} onClick={() => setActiveView('aiModelConfig')}>AI模型配置</button>
           </div>
         </nav>
         <div className="runtime">
@@ -932,6 +992,77 @@ function App() {
           </section>
         )}
 
+        {activeView === 'aiModelConfig' && (
+          <section className="contentGrid">
+            <div className="panel">
+              <h2>AI模型配置</h2>
+              <div className="toolIntro">
+                <p>配置后续 AI 功能共用的模型服务。API Key 使用 Electron safeStorage 加密后保存到本机 SQLite。</p>
+              </div>
+              <div className="form">
+                <label className="inlineCheck">
+                  <input type="checkbox" checked={aiConfig.enabled} onChange={(event) => setAiConfig({ ...aiConfig, enabled: event.target.checked })} />
+                  启用 AI 功能
+                </label>
+                <label>
+                  模型供应商
+                  <select value={aiConfig.provider} onChange={(event) => applyProvider(event.target.value)}>
+                    {aiProviders.map((provider) => (
+                      <option key={provider.value} value={provider.value}>{provider.label}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  API Base URL
+                  <input value={aiConfig.baseUrl} onChange={(event) => setAiConfig({ ...aiConfig, baseUrl: event.target.value })} />
+                </label>
+                <label>
+                  API Key
+                  <input type="password" value={aiConfig.apiKey || ''} onChange={(event) => setAiConfig({ ...aiConfig, apiKey: event.target.value })} placeholder={aiConfig.encryptedApiKey ? '已加密保存，输入新 Key 可替换' : '请输入 API Key'} />
+                </label>
+                <div className="splitInputs">
+                  <label>
+                    文本模型
+                    <input value={aiConfig.textModel} onChange={(event) => setAiConfig({ ...aiConfig, textModel: event.target.value })} />
+                  </label>
+                  <label>
+                    视觉模型
+                    <input value={aiConfig.visionModel} onChange={(event) => setAiConfig({ ...aiConfig, visionModel: event.target.value })} />
+                  </label>
+                </div>
+                <div className="splitInputs">
+                  <label>
+                    Temperature
+                    <input type="number" min="0" max="2" step="0.1" value={aiConfig.temperature} onChange={(event) => setAiConfig({ ...aiConfig, temperature: event.target.value })} />
+                  </label>
+                  <label>
+                    Max Tokens
+                    <input type="number" min="256" max="200000" step="256" value={aiConfig.maxTokens} onChange={(event) => setAiConfig({ ...aiConfig, maxTokens: event.target.value })} />
+                  </label>
+                </div>
+                <div className="actions">
+                  <button onClick={saveAiConfig} disabled={busy}>保存配置</button>
+                  <button onClick={testAiConfig} disabled={busy}>测试连接</button>
+                </div>
+              </div>
+            </div>
+            <div className="panel">
+              <h2>连接状态</h2>
+              {aiTestResult ? (
+                <div className={`statusBox ${aiTestResult.ok ? 'success' : 'failed'}`}>
+                  <strong>{aiTestResult.ok ? '连接成功' : '连接失败'}</strong>
+                  <span>{aiTestResult.message}</span>
+                </div>
+              ) : (
+                <div className="empty">保存后可测试连接</div>
+              )}
+              <div className="toolIntro">
+                <p>国内供应商默认包含通义千问、DeepSeek、智谱 GLM、豆包/火山方舟、腾讯混元，也支持 OpenAI、Gemini、Ollama 和 OpenAI Compatible 接口。</p>
+              </div>
+            </div>
+          </section>
+        )}
+
         <FileTable
           files={files}
           selectedFileIds={selectedFileIds}
@@ -1165,6 +1296,7 @@ function viewTitle(activeView) {
   if (activeView === 'removeAiMark') return '去AI标识';
   if (activeView === 'imageDuplicate') return '图片复制';
   if (activeView === 'wechatMarkdown') return '公众号转MD';
+  if (activeView === 'aiModelConfig') return 'AI模型配置';
   return '本地素材库';
 }
 
@@ -1175,6 +1307,7 @@ function viewSubtitle(activeView) {
   if (activeView === 'removeAiMark') return '工具集能力：面向图片中的 AI 标识、水印和平台痕迹处理。';
   if (activeView === 'imageDuplicate') return '按参数组合批量生成多套轻微不同的图片副本。';
   if (activeView === 'wechatMarkdown') return '下载微信公众号文章并保存为 Markdown 文件。';
+  if (activeView === 'aiModelConfig') return '集中管理后续 AI 功能共用的模型、密钥和连接参数。';
   return '管理本机目录、移动硬盘和 NAS，建立本地 SQLite 索引。';
 }
 
