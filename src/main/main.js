@@ -10,6 +10,7 @@ const { createSettingsManager } = require('../modules/settingsManager');
 const aiMarkRemover = require('../modules/aiMarkRemover');
 const imageDuplicator = require('../modules/imageDuplicator');
 const wechatMpMarkdown = require('../modules/wechatMpMarkdown');
+const articleRewriter = require('../modules/articleRewriter');
 const { createAiConfigManager } = require('../modules/aiConfigManager');
 const { createLogger } = require('../utils/logger');
 
@@ -67,6 +68,17 @@ function registerIpc() {
   ipcMain.handle('dialog:selectDirectory', async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
       properties: ['openDirectory']
+    });
+    return result.canceled ? null : result.filePaths[0];
+  });
+
+  ipcMain.handle('dialog:selectMarkdownFile', async () => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openFile'],
+      filters: [
+        { name: 'Markdown/Text', extensions: ['md', 'markdown', 'txt'] },
+        { name: 'All Files', extensions: ['*'] }
+      ]
     });
     return result.canceled ? null : result.filePaths[0];
   });
@@ -156,6 +168,14 @@ function registerIpc() {
 
   ipcMain.handle('tools:downloadWechatArticle', async (_event, payload) => (
     wechatMpMarkdown.downloadArticle(payload.url, payload.options)
+  ));
+
+  ipcMain.handle('content:readMarkdownFile', async (_event, filePath) => (
+    articleRewriter.readMarkdownFile(filePath)
+  ));
+
+  ipcMain.handle('content:rewriteArticle', async (_event, payload) => (
+    articleRewriter.rewriteArticle(payload, (options) => aiConfigManager.completeText(options))
   ));
 
   ipcMain.handle('settings:getAll', () => settingsManager.all());

@@ -4,6 +4,7 @@ contextBridge.exposeInMainWorld('mediapolotx', {
   getStatus: () => ipcRenderer.invoke('app:getStatus'),
   openPath: (targetPath) => ipcRenderer.invoke('app:openPath', targetPath),
   selectDirectory: () => ipcRenderer.invoke('dialog:selectDirectory'),
+  selectMarkdownFile: () => ipcRenderer.invoke('dialog:selectMarkdownFile'),
   storage: {
     add: (payload) => ipcRenderer.invoke('storage:add', payload),
     list: () => ipcRenderer.invoke('storage:list'),
@@ -44,6 +45,10 @@ contextBridge.exposeInMainWorld('mediapolotx', {
       ipcRenderer.on('tools:imageDuplicateProgress', listener);
       return () => ipcRenderer.removeListener('tools:imageDuplicateProgress', listener);
     }
+  },
+  content: {
+    readMarkdownFile: (filePath) => ipcRenderer.invoke('content:readMarkdownFile', filePath),
+    rewriteArticle: (payload) => ipcRenderer.invoke('content:rewriteArticle', payload)
   },
   settings: {
     getAll: () => ipcRenderer.invoke('settings:getAll'),

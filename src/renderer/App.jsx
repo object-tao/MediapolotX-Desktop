@@ -13,6 +13,19 @@ const imageModes = [
   { value: 'template', label: '模板渲染' }
 ];
 
+const articleTypeOptions = [
+  { value: 'customs_notice', label: '海关公告' },
+  { value: 'industry_news', label: '行业资讯' },
+  { value: 'peer_article', label: '同行文章' },
+  { value: 'general', label: '普通文章' }
+];
+
+const articleLengthOptions = [
+  { value: '中等文章', label: '中等文章' },
+  { value: '深度长文', label: '深度长文' },
+  { value: '短文', label: '短文' }
+];
+
 function providerLabel(providers, value) {
   return providers.find((provider) => provider.value === value)?.label || value;
 }
@@ -97,6 +110,22 @@ function App() {
     imageMode: 'save'
   });
   const [wechatResult, setWechatResult] = useState(null);
+  const [articleOptions, setArticleOptions] = useState({
+    inputText: '',
+    sourceFile: '',
+    sourceTitle: '',
+    outputDir: '',
+    articleType: 'customs_notice',
+    targetTopic: '',
+    targetAudience: '外贸企业、跨境电商、货代、报关行和企业经营者',
+    style: '专业、通俗、适合公众号发布',
+    length: '深度长文',
+    instructions: '不要照抄原文，结合海关监管、外贸合规和企业应对建议进行深度重写。',
+    modelId: '',
+    temperature: 0.6,
+    maxTokens: 4096
+  });
+  const [articleResult, setArticleResult] = useState(null);
   const [aiProviders, setAiProviders] = useState([]);
   const [aiStore, setAiStore] = useState({ models: [], defaultTextModelId: '', defaultVisionModelId: '' });
   const [editingAiModel, setEditingAiModel] = useState(null);
@@ -160,6 +189,7 @@ function App() {
       if (settings.aiToolOptions) setAiToolOptions((current) => ({ ...current, ...settings.aiToolOptions }));
       if (settings.duplicateOptions) setDuplicateOptions((current) => ({ ...current, ...settings.duplicateOptions }));
       if (settings.wechatOptions) setWechatOptions((current) => ({ ...current, ...settings.wechatOptions }));
+      if (settings.articleOptions) setArticleOptions((current) => ({ ...current, ...settings.articleOptions }));
     });
     refreshStorages();
     refreshTasks();
@@ -478,6 +508,52 @@ function App() {
     }
   }
 
+  async function importArticleMarkdown() {
+    const filePath = await window.mediapolotx.selectMarkdownFile();
+    if (!filePath) return;
+    setBusy(true);
+    setMessage('正在读取 Markdown 文件...');
+    try {
+      const file = await window.mediapolotx.content.readMarkdownFile(filePath);
+      setArticleOptions((current) => ({
+        ...current,
+        inputText: file.content,
+        sourceFile: file.filePath,
+        sourceTitle: current.sourceTitle || file.filename.replace(/\.[^.]+$/, '')
+      }));
+      setMessage('Markdown 文件已导入');
+    } catch (error) {
+      setMessage(`导入失败：${cleanRemoteError(error)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function rewriteArticle() {
+    if (!articleOptions.inputText.trim() || !articleOptions.outputDir) return;
+    setBusy(true);
+    setArticleResult(null);
+    setMessage('正在调用 AI 生成重写文章...');
+    try {
+      await window.mediapolotx.settings.set({
+        key: 'articleOptions',
+        value: {
+          ...articleOptions,
+          inputText: '',
+          sourceFile: ''
+        }
+      });
+      const result = await window.mediapolotx.content.rewriteArticle(articleOptions);
+      setArticleResult(result);
+      setMessage(`文章生成完成：${result.title}`);
+      await openPath(articleOptions.outputDir);
+    } catch (error) {
+      setMessage(`生成失败：${cleanRemoteError(error)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function addAiModel(provider = 'qwen') {
     const template = await window.mediapolotx.aiConfig.template(provider);
     setEditingAiModel({
@@ -621,6 +697,10 @@ function App() {
             <button className={`navItem subItem ${activeView === 'removeAiMark' ? 'active' : ''}`} onClick={() => setActiveView('removeAiMark')}>去AI标识</button>
             <button className={`navItem subItem ${activeView === 'imageDuplicate' ? 'active' : ''}`} onClick={() => setActiveView('imageDuplicate')}>图片复制</button>
             <button className={`navItem subItem ${activeView === 'wechatMarkdown' ? 'active' : ''}`} onClick={() => setActiveView('wechatMarkdown')}>公众号转MD</button>
+          </div>
+          <div className="navGroup">
+            <div className="navGroupTitle">内容创作</div>
+            <button className={`navItem subItem ${activeView === 'articleRewrite' ? 'active' : ''}`} onClick={() => setActiveView('articleRewrite')}>文章重写</button>
           </div>
           <div className="navGroup">
             <div className="navGroupTitle">基础配置</div>
@@ -1053,6 +1133,104 @@ function App() {
           </section>
         )}
 
+        {activeView === 'articleRewrite' && (
+          <section className="contentGrid wideRight">
+            <div className="panel">
+              <h2>文章重写</h2>
+              <div className="toolIntro">
+                <p>导入 Markdown 或粘贴原文，按文章类型、读者和要求生成一篇新的 Markdown 文章，并同时保存原文备份。</p>
+              </div>
+              <div className="form">
+                <label>
+                  原文标题
+                  <input value={articleOptions.sourceTitle} onChange={(event) => setArticleOptions({ ...articleOptions, sourceTitle: event.target.value })} placeholder="可选，用于原文备份标题" />
+                </label>
+                <div className="actions actionWrap">
+                  <button type="button" onClick={importArticleMarkdown} disabled={busy}>导入 MD/TXT</button>
+                  {articleOptions.sourceFile && <button type="button" onClick={() => openPath(articleOptions.sourceFile)}>打开源文件</button>}
+                </div>
+                <label>
+                  原文内容
+                  <textarea className="largeTextarea" value={articleOptions.inputText} onChange={(event) => setArticleOptions({ ...articleOptions, inputText: event.target.value })} placeholder="粘贴资讯、公告、同行文章，或导入 .md/.txt 文件" />
+                </label>
+                <DirectoryPicker
+                  label="保存目录"
+                  value={articleOptions.outputDir}
+                  onPick={(outputDir) => setArticleOptions({ ...articleOptions, outputDir })}
+                  selectDirectory={selectDirectory}
+                />
+                <div className="splitInputs">
+                  <label>
+                    文章类型
+                    <select value={articleOptions.articleType} onChange={(event) => setArticleOptions({ ...articleOptions, articleType: event.target.value })}>
+                      {articleTypeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                    </select>
+                  </label>
+                  <label>
+                    文章长度
+                    <select value={articleOptions.length} onChange={(event) => setArticleOptions({ ...articleOptions, length: event.target.value })}>
+                      {articleLengthOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                    </select>
+                  </label>
+                </div>
+                <label>
+                  目标主题
+                  <input value={articleOptions.targetTopic} onChange={(event) => setArticleOptions({ ...articleOptions, targetTopic: event.target.value })} placeholder="不填则由 AI 根据原文提炼" />
+                </label>
+                <label>
+                  目标读者
+                  <input value={articleOptions.targetAudience} onChange={(event) => setArticleOptions({ ...articleOptions, targetAudience: event.target.value })} />
+                </label>
+                <label>
+                  文章风格
+                  <input value={articleOptions.style} onChange={(event) => setArticleOptions({ ...articleOptions, style: event.target.value })} />
+                </label>
+                <label>
+                  改写要求
+                  <textarea value={articleOptions.instructions} onChange={(event) => setArticleOptions({ ...articleOptions, instructions: event.target.value })} />
+                </label>
+                <label>
+                  使用模型
+                  <select value={articleOptions.modelId} onChange={(event) => setArticleOptions({ ...articleOptions, modelId: event.target.value })}>
+                    <option value="">默认文本模型</option>
+                    {aiStore.models.filter((model) => model.enabled !== false && ['text', 'both'].includes(model.type)).map((model) => (
+                      <option key={model.id} value={model.id}>{model.name}</option>
+                    ))}
+                  </select>
+                </label>
+                <div className="splitInputs">
+                  <label>
+                    Temperature
+                    <input type="number" min="0" max="2" step="0.1" value={articleOptions.temperature} onChange={(event) => setArticleOptions({ ...articleOptions, temperature: event.target.value })} />
+                  </label>
+                  <label>
+                    Max Tokens
+                    <input type="number" min="1024" max="200000" step="512" value={articleOptions.maxTokens} onChange={(event) => setArticleOptions({ ...articleOptions, maxTokens: event.target.value })} />
+                  </label>
+                </div>
+                <button onClick={rewriteArticle} disabled={busy || !articleOptions.inputText.trim() || !articleOptions.outputDir}>生成文章</button>
+              </div>
+            </div>
+            <div className="panel">
+              <div className="panelHeader">
+                <h2>生成结果</h2>
+                {articleResult && <button type="button" onClick={() => openPath(articleResult.rewrittenPath)}>打开文件</button>}
+              </div>
+              {articleResult ? (
+                <div className="resultList">
+                  <span><strong>标题</strong>{articleResult.title}</span>
+                  <span><strong>模型</strong>{articleResult.modelName || articleResult.modelId}</span>
+                  <span><strong>原文备份</strong>{articleResult.originalPath}</span>
+                  <span><strong>生成文</strong>{articleResult.rewrittenPath}</span>
+                  <pre className="markdownPreview">{articleResult.markdown}</pre>
+                </div>
+              ) : (
+                <div className="empty">尚未生成文章</div>
+              )}
+            </div>
+          </section>
+        )}
+
         {activeView === 'aiModelConfig' && (
           <section className="contentGrid">
             <div className="panel">
@@ -1404,6 +1582,7 @@ function viewTitle(activeView) {
   if (activeView === 'removeAiMark') return '去AI标识';
   if (activeView === 'imageDuplicate') return '图片复制';
   if (activeView === 'wechatMarkdown') return '公众号转MD';
+  if (activeView === 'articleRewrite') return '文章重写';
   if (activeView === 'aiModelConfig') return 'AI模型配置';
   return '本地素材库';
 }
@@ -1415,6 +1594,7 @@ function viewSubtitle(activeView) {
   if (activeView === 'removeAiMark') return '工具集能力：面向图片中的 AI 标识、水印和平台痕迹处理。';
   if (activeView === 'imageDuplicate') return '按参数组合批量生成多套轻微不同的图片副本。';
   if (activeView === 'wechatMarkdown') return '下载微信公众号文章并保存为 Markdown 文件。';
+  if (activeView === 'articleRewrite') return '导入资讯、公告或同行文章，调用 AI 深度重写并保存 Markdown。';
   if (activeView === 'aiModelConfig') return '集中管理后续 AI 功能共用的模型、密钥和连接参数。';
   return '管理本机目录、移动硬盘和 NAS，建立本地 SQLite 索引。';
 }

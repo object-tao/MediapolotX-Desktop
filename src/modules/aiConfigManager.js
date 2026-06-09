@@ -98,6 +98,33 @@ function createAiConfigManager(settingsManager, safeStorage) {
     }
   }
 
+  async function completeText(options = {}) {
+    const store = normalizeStore(settingsManager.get(SETTING_KEY, null));
+    const model = findTextModel(store, options.modelId);
+    if (!model) throw new Error('请先在“基础配置 > AI模型配置”中保存并设置默认文本模型');
+    const provider = getProviderDefaults(model.provider);
+    const apiKey = decryptApiKey(model.encryptedApiKey);
+    const headers = { 'Content-Type': 'application/json' };
+    if (provider.auth !== 'optional' && !apiKey) throw new Error('默认文本模型缺少 API Key');
+    if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+
+    try {
+      const response = await axios.post(`${trimTrailingSlash(model.baseUrl)}/chat/completions`, {
+        model: model.resourceId || model.model,
+        messages: options.messages,
+        temperature: Number(options.temperature ?? model.temperature ?? 0.5),
+        max_tokens: Number(options.maxTokens ?? model.maxTokens ?? 4096)
+      }, { timeout: Number(options.timeout ?? 120000), headers });
+      return {
+        modelId: model.id,
+        modelName: model.name,
+        content: response.data?.choices?.[0]?.message?.content || ''
+      };
+    } catch (error) {
+      throw new Error(formatTestError(error, model));
+    }
+  }
+
   function getProviders() {
     return Object.entries(PROVIDERS).map(([value, provider]) => ({ value, ...provider }));
   }
@@ -137,9 +164,19 @@ function createAiConfigManager(settingsManager, safeStorage) {
     deleteModel,
     setDefault,
     testModel,
+    completeText,
     getProviders,
     getModelTemplate
   };
+}
+
+function findTextModel(store, modelId) {
+  if (modelId) return store.models.find((model) => model.id === modelId && model.enabled !== false);
+  if (store.defaultTextModelId) {
+    const defaultModel = store.models.find((model) => model.id === store.defaultTextModelId && model.enabled !== false);
+    if (defaultModel) return defaultModel;
+  }
+  return store.models.find((model) => model.enabled !== false && ['text', 'both'].includes(model.type));
 }
 
 function normalizeStore(stored) {

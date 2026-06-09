@@ -14,7 +14,8 @@ body {
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 
@@ -157,6 +158,10 @@ nav {
   gap: 18px;
 }
 
+.contentGrid.wideRight {
+  grid-template-columns: minmax(360px, 520px) 1fr;
+}
+
 .panel {
   background: #ffffff;
   border: 1px solid #dce2ea;
@@ -257,13 +262,24 @@ label {
 }
 
 input,
-select {
+select,
+textarea {
   width: 100%;
   border: 1px solid #cbd3df;
   border-radius: 6px;
   padding: 10px 12px;
   color: #18212f;
   background: #ffffff;
+}
+
+textarea {
+  min-height: 108px;
+  resize: vertical;
+  line-height: 1.55;
+}
+
+.largeTextarea {
+  min-height: 260px;
 }
 
 .pathRow input {
@@ -608,6 +624,20 @@ select {
 
 .resultList span:not(:first-child) {
   overflow-wrap: anywhere;
+}
+
+.markdownPreview {
+  max-height: 560px;
+  overflow: auto;
+  margin: 0;
+  padding: 14px;
+  border: 1px solid #dce2ea;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #243044;
+  white-space: pre-wrap;
+  line-height: 1.6;
+  font-family: Consolas, "SFMono-Regular", Menlo, monospace;
 }
 
 .inlineCheck {

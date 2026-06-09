@@ -10,6 +10,7 @@ const { createTaskManager } = require('../src/modules/taskManager');
 const aiMarkRemover = require('../src/modules/aiMarkRemover');
 const imageDuplicator = require('../src/modules/imageDuplicator');
 const wechatMpMarkdown = require('../src/modules/wechatMpMarkdown');
+const articleRewriter = require('../src/modules/articleRewriter');
 const { createAiConfigManager } = require('../src/modules/aiConfigManager');
 
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mediapolotx-smoke-'));
@@ -182,6 +183,35 @@ try {
   }
   if (!aiConfigManager.getProviders().some((provider) => provider.value === 'openai')) {
     throw new Error('AI providers smoke test failed.');
+  }
+
+  const rewriteDir = path.join(tempRoot, 'rewrite-output');
+  const rewriteResult = await articleRewriter.rewriteArticle({
+    inputText: '海关发布一则测试公告，提醒企业关注申报规范。',
+    sourceTitle: '测试公告',
+    outputDir: rewriteDir,
+    articleType: 'customs_notice',
+    targetTopic: '海关公告解读',
+    targetAudience: '外贸企业',
+    style: '专业通俗',
+    length: '中等文章',
+    instructions: '生成企业应对建议。'
+  }, async (options) => {
+    if (!options.messages[1].content.includes('海关发布一则测试公告')) {
+      throw new Error('Article rewrite prompt smoke test failed.');
+    }
+    return {
+      modelId: 'mock-model',
+      modelName: 'Mock Model',
+      content: '# 海关公告解读\n\n## 摘要\n\n测试摘要。'
+    };
+  });
+  if (
+    !fs.existsSync(rewriteResult.originalPath)
+    || !fs.existsSync(rewriteResult.rewrittenPath)
+    || !rewriteResult.markdown.includes('测试摘要')
+  ) {
+    throw new Error('Article rewrite smoke test failed.');
   }
 
   db.close();
