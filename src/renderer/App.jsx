@@ -83,6 +83,12 @@ function App() {
   });
   const [duplicateFiles, setDuplicateFiles] = useState([]);
   const [duplicateProgress, setDuplicateProgress] = useState(null);
+  const [wechatOptions, setWechatOptions] = useState({
+    url: '',
+    outputDir: '',
+    imageMode: 'save'
+  });
+  const [wechatResult, setWechatResult] = useState(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -128,6 +134,7 @@ function App() {
       if (settings.videoOptions) setVideoOptions((current) => ({ ...current, ...settings.videoOptions }));
       if (settings.aiToolOptions) setAiToolOptions((current) => ({ ...current, ...settings.aiToolOptions }));
       if (settings.duplicateOptions) setDuplicateOptions((current) => ({ ...current, ...settings.duplicateOptions }));
+      if (settings.wechatOptions) setWechatOptions((current) => ({ ...current, ...settings.wechatOptions }));
     });
     refreshStorages();
     refreshTasks();
@@ -423,6 +430,29 @@ function App() {
     }));
   }
 
+  async function downloadWechatArticle() {
+    if (!wechatOptions.url || !wechatOptions.outputDir) return;
+    setBusy(true);
+    setMessage('正在下载公众号文章并转换 Markdown...');
+    try {
+      await window.mediapolotx.settings.set({ key: 'wechatOptions', value: wechatOptions });
+      const result = await window.mediapolotx.tools.downloadWechatArticle({
+        url: wechatOptions.url,
+        options: {
+          outputDir: wechatOptions.outputDir,
+          imageMode: wechatOptions.imageMode
+        }
+      });
+      setWechatResult(result);
+      setMessage(`转换完成：${result.title || result.mdPath}`);
+      await openPath(wechatOptions.outputDir);
+    } catch (error) {
+      setMessage(`转换失败：${error.message}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function openPath(targetPath) {
     const result = await window.mediapolotx.openPath(targetPath);
     if (!result.opened) setMessage(result.errorMessage || '无法打开路径');
@@ -473,6 +503,7 @@ function App() {
             <div className="navGroupTitle">工具集</div>
             <button className={`navItem subItem ${activeView === 'removeAiMark' ? 'active' : ''}`} onClick={() => setActiveView('removeAiMark')}>去AI标识</button>
             <button className={`navItem subItem ${activeView === 'imageDuplicate' ? 'active' : ''}`} onClick={() => setActiveView('imageDuplicate')}>图片复制</button>
+            <button className={`navItem subItem ${activeView === 'wechatMarkdown' ? 'active' : ''}`} onClick={() => setActiveView('wechatMarkdown')}>公众号转MD</button>
           </div>
         </nav>
         <div className="runtime">
@@ -855,6 +886,52 @@ function App() {
           </section>
         )}
 
+        {activeView === 'wechatMarkdown' && (
+          <section className="contentGrid">
+            <div className="panel">
+              <h2>公众号转MD</h2>
+              <div className="toolIntro">
+                <p>输入微信公众号文章 URL，将正文转换为 Markdown 文件。图片可保存到本地、保留远程 URL，或以 base64 写入 Markdown。</p>
+              </div>
+              <div className="form">
+                <label>
+                  文章 URL
+                  <input value={wechatOptions.url} onChange={(event) => setWechatOptions({ ...wechatOptions, url: event.target.value })} placeholder="https://mp.weixin.qq.com/s/..." />
+                </label>
+                <DirectoryPicker
+                  label="保存目录"
+                  value={wechatOptions.outputDir}
+                  onPick={(outputDir) => setWechatOptions({ ...wechatOptions, outputDir })}
+                  selectDirectory={selectDirectory}
+                />
+                <label>
+                  图片处理
+                  <select value={wechatOptions.imageMode} onChange={(event) => setWechatOptions({ ...wechatOptions, imageMode: event.target.value })}>
+                    <option value="save">保存到本地目录</option>
+                    <option value="url">保留远程 URL</option>
+                    <option value="base64">写入 base64</option>
+                  </select>
+                </label>
+                <button onClick={downloadWechatArticle} disabled={busy || !wechatOptions.url || !wechatOptions.outputDir}>下载为 Markdown</button>
+              </div>
+            </div>
+            <div className="panel">
+              <h2>转换结果</h2>
+              {wechatResult ? (
+                <div className="resultList">
+                  <span><strong>标题</strong>{wechatResult.title || '-'}</span>
+                  <span><strong>作者</strong>{wechatResult.author || '-'}</span>
+                  <span><strong>Markdown</strong>{wechatResult.mdPath}</span>
+                  {wechatResult.imageDir && <span><strong>图片目录</strong>{wechatResult.imageDir}</span>}
+                  <button onClick={() => openPath(wechatResult.mdPath)}>打开 Markdown</button>
+                </div>
+              ) : (
+                <div className="empty">尚未转换</div>
+              )}
+            </div>
+          </section>
+        )}
+
         <FileTable
           files={files}
           selectedFileIds={selectedFileIds}
@@ -1087,6 +1164,7 @@ function viewTitle(activeView) {
   if (activeView === 'sync') return 'Web 协同';
   if (activeView === 'removeAiMark') return '去AI标识';
   if (activeView === 'imageDuplicate') return '图片复制';
+  if (activeView === 'wechatMarkdown') return '公众号转MD';
   return '本地素材库';
 }
 
@@ -1096,6 +1174,7 @@ function viewSubtitle(activeView) {
   if (activeView === 'sync') return '连接 MediapolotX Web，获取任务队列并回传处理状态。';
   if (activeView === 'removeAiMark') return '工具集能力：面向图片中的 AI 标识、水印和平台痕迹处理。';
   if (activeView === 'imageDuplicate') return '按参数组合批量生成多套轻微不同的图片副本。';
+  if (activeView === 'wechatMarkdown') return '下载微信公众号文章并保存为 Markdown 文件。';
   return '管理本机目录、移动硬盘和 NAS，建立本地 SQLite 索引。';
 }
 

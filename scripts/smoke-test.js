@@ -9,6 +9,7 @@ const { createSettingsManager } = require('../src/modules/settingsManager');
 const { createTaskManager } = require('../src/modules/taskManager');
 const aiMarkRemover = require('../src/modules/aiMarkRemover');
 const imageDuplicator = require('../src/modules/imageDuplicator');
+const wechatMpMarkdown = require('../src/modules/wechatMpMarkdown');
 
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mediapolotx-smoke-'));
 const dbPath = path.join(tempRoot, 'smoke.sqlite');
@@ -125,6 +126,21 @@ try {
     throw new Error('Image duplicator generated directory exclusion smoke test failed.');
   }
   fs.rmSync(duplicateRoot, { recursive: true, force: true });
+
+  const article = wechatMpMarkdown.parseArticle(`
+    <h1 id="activity-name"> 测试文章 </h1>
+    <span id="js_name">测试作者</span>
+    <em id="publish_time">2026-06-09</em>
+    <div id="js_content"><p>正文</p><img data-src="//example.com/a.png"></div>
+  `, 'https://mp.weixin.qq.com/s/test');
+  if (
+    article.title !== '测试文章'
+    || article.author !== '测试作者'
+    || !article.contentHtml.includes('https://example.com/a.png')
+    || wechatMpMarkdown.sanitizeFilename('a/b:c') !== 'a_b_c'
+  ) {
+    throw new Error('Wechat markdown smoke test failed.');
+  }
 
   db.close();
   console.log('Smoke test passed.');

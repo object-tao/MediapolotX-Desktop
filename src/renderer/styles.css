@@ -524,6 +524,26 @@ select {
   color: #18212f;
 }
 
+.resultList {
+  display: grid;
+  gap: 12px;
+}
+
+.resultList span {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  color: #536173;
+}
+
+.resultList strong {
+  color: #18212f;
+}
+
+.resultList span:not(:first-child) {
+  overflow-wrap: anywhere;
+}
+
 .metrics {
   display: grid;
   grid-template-columns: 1fr 1fr;

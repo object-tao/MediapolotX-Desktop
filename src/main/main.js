@@ -9,6 +9,7 @@ const { createTaskSync } = require('../modules/taskSync');
 const { createSettingsManager } = require('../modules/settingsManager');
 const aiMarkRemover = require('../modules/aiMarkRemover');
 const imageDuplicator = require('../modules/imageDuplicator');
+const wechatMpMarkdown = require('../modules/wechatMpMarkdown');
 const { createLogger } = require('../utils/logger');
 
 let mainWindow;
@@ -148,6 +149,10 @@ function registerIpc() {
     imageDuplicator.duplicateImages(payload.folderPath, payload.options, (progress) => {
       mainWindow?.webContents.send('tools:imageDuplicateProgress', progress);
     })
+  ));
+
+  ipcMain.handle('tools:downloadWechatArticle', async (_event, payload) => (
+    wechatMpMarkdown.downloadArticle(payload.url, payload.options)
   ));
 
   ipcMain.handle('settings:getAll', () => settingsManager.all());

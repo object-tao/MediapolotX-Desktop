@@ -33,6 +33,7 @@ contextBridge.exposeInMainWorld('mediapolotx', {
     removeAiMarks: (payload) => ipcRenderer.invoke('tools:removeAiMarks', payload),
     scanImageDuplicate: (payload) => ipcRenderer.invoke('tools:scanImageDuplicate', payload),
     duplicateImages: (payload) => ipcRenderer.invoke('tools:duplicateImages', payload),
+    downloadWechatArticle: (payload) => ipcRenderer.invoke('tools:downloadWechatArticle', payload),
     onAiMarkProgress: (callback) => {
       const listener = (_event, payload) => callback(payload);
       ipcRenderer.on('tools:aiMarkProgress', listener);
