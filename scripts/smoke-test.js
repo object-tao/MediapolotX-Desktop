@@ -64,6 +64,14 @@ try {
   if (!(await aiMarkRemover.detectAiMarkers(pngPath)).hasAiMarkers) {
     throw new Error('AI marker fixture smoke test failed.');
   }
+  const aiMarkerDetection = await aiMarkRemover.detectAiMarkers(pngPath);
+  if (
+    !aiMarkerDetection.frequencyAnalysis
+    || typeof aiMarkerDetection.frequencyAnalysis.score !== 'number'
+    || typeof aiMarkerDetection.platformAiRisk !== 'boolean'
+  ) {
+    throw new Error('AI frequency analysis smoke test failed.');
+  }
   const aiFiles = await aiMarkRemover.scanFolder(tempRoot, { includeJpg: false, includePng: true });
   const ignoredBackupDir = path.join(tempRoot, '_mediapolotx_backup');
   fs.mkdirSync(ignoredBackupDir, { recursive: true });

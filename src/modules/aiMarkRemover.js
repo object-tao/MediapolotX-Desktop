@@ -4,6 +4,7 @@ const sharp = require('sharp');
 
 const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png']);
 const IGNORED_DIRECTORY_NAMES = new Set(['_mediapolotx_backup', '_mediapolotx_no_ai']);
+const FREQUENCY_RISK_THRESHOLD = 68;
 const AI_SIGNATURES = [
   'c2pa',
   'content credentials',
@@ -34,7 +35,9 @@ async function scanFolder(folderPath, options = {}) {
       extension: ext === '.jpeg' ? 'jpg' : ext.slice(1),
       sizeBytes: stats.size,
       hasAiMarkers: detection.hasAiMarkers,
-      markers: detection.markers
+      markers: detection.markers,
+      frequencyAnalysis: detection.frequencyAnalysis,
+      platformAiRisk: detection.platformAiRisk
     });
   });
 
@@ -129,9 +132,98 @@ async function detectAiMarkers(filePath) {
   const buffer = await fs.readFile(filePath);
   const lower = buffer.toString('latin1').toLowerCase();
   const markers = AI_SIGNATURES.filter((signature) => lower.includes(signature));
+  const frequencyAnalysis = await analyzeFrequencyRisk(filePath).catch((error) => ({
+    score: 0,
+    level: 'unknown',
+    reasons: [`频域分析失败：${error.message}`],
+    metrics: {}
+  }));
+  const platformAiRisk = frequencyAnalysis.score >= FREQUENCY_RISK_THRESHOLD;
   return {
-    hasAiMarkers: markers.length > 0,
-    markers
+    hasAiMarkers: markers.length > 0 || platformAiRisk,
+    explicitAiMarkers: markers.length > 0,
+    platformAiRisk,
+    markers,
+    frequencyAnalysis
+  };
+}
+
+async function analyzeFrequencyRisk(filePath) {
+  const sampleSize = 128;
+  const { data, info } = await sharp(filePath, { limitInputPixels: false })
+    .rotate()
+    .resize(sampleSize, sampleSize, { fit: 'inside', withoutEnlargement: true })
+    .greyscale()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const width = info.width;
+  const height = info.height;
+  if (width < 24 || height < 24) {
+    return {
+      score: 0,
+      level: 'low',
+      reasons: ['图片尺寸过小，频域分析仅供参考'],
+      metrics: { width, height }
+    };
+  }
+
+  const pixels = Array.from(data, (value) => value / 255);
+  const residual = computeLaplacianResidual(pixels, width, height);
+  const blockStats = computeBlockDctStats(pixels, width, height);
+  const periodicity = computePeriodicity(residual.values, residual.width, residual.height);
+  const residualVariance = variance(residual.values);
+  const residualKurtosis = kurtosis(residual.values);
+  const reasons = [];
+  let score = 0;
+
+  if (blockStats.highFrequencyRatio > 0.36) {
+    score += 24;
+    reasons.push('高频能量占比偏高，可能存在生成纹理或平台可识别的细节伪影');
+  } else if (blockStats.highFrequencyRatio > 0.28) {
+    score += 14;
+    reasons.push('高频能量占比略高');
+  }
+
+  if (blockStats.midFrequencyRatio > 0.46 && blockStats.lowFrequencyRatio < 0.34) {
+    score += 18;
+    reasons.push('中频纹理能量集中，可能接近 AI 生成图的平滑纹理分布');
+  }
+
+  if (periodicity.score > 0.2) {
+    score += 22;
+    reasons.push('残差中存在周期性纹理峰值，平台可能判定为生成痕迹');
+  } else if (periodicity.score > 0.14) {
+    score += 12;
+    reasons.push('残差中存在轻微周期性纹理');
+  }
+
+  if (residualVariance < 0.0018 && blockStats.highFrequencyRatio > 0.22) {
+    score += 16;
+    reasons.push('噪声残差偏均匀，缺少自然拍摄噪声起伏');
+  }
+
+  if (residualKurtosis < 2.2 && blockStats.highFrequencyRatio > 0.24) {
+    score += 12;
+    reasons.push('残差峰度偏低，细节分布过于平均');
+  }
+
+  score = Math.min(100, Math.round(score));
+  if (reasons.length === 0) reasons.push('未发现明显频域 AI 风险特征');
+
+  return {
+    score,
+    level: score >= FREQUENCY_RISK_THRESHOLD ? 'high' : score >= 40 ? 'medium' : 'low',
+    reasons,
+    metrics: {
+      width,
+      height,
+      highFrequencyRatio: roundMetric(blockStats.highFrequencyRatio),
+      midFrequencyRatio: roundMetric(blockStats.midFrequencyRatio),
+      lowFrequencyRatio: roundMetric(blockStats.lowFrequencyRatio),
+      periodicityScore: roundMetric(periodicity.score),
+      residualVariance: roundMetric(residualVariance),
+      residualKurtosis: roundMetric(residualKurtosis)
+    }
   };
 }
 
@@ -189,6 +281,133 @@ function createWatermarkSvg(width, height, watermark) {
         fill-opacity="${opacity}">${text}</text>
     </svg>
   `);
+}
+
+function computeLaplacianResidual(pixels, width, height) {
+  const values = [];
+  for (let y = 1; y < height - 1; y += 1) {
+    for (let x = 1; x < width - 1; x += 1) {
+      const center = pixels[y * width + x] * 4;
+      const adjacent = pixels[(y - 1) * width + x]
+        + pixels[(y + 1) * width + x]
+        + pixels[y * width + x - 1]
+        + pixels[y * width + x + 1];
+      values.push(Math.abs(center - adjacent));
+    }
+  }
+  return { values, width: width - 2, height: height - 2 };
+}
+
+function computeBlockDctStats(pixels, width, height) {
+  const blockSize = 8;
+  let low = 0;
+  let mid = 0;
+  let high = 0;
+  let total = 0;
+
+  for (let y = 0; y <= height - blockSize; y += blockSize) {
+    for (let x = 0; x <= width - blockSize; x += blockSize) {
+      const coeffs = dct8x8(pixels, width, x, y);
+      for (const coeff of coeffs) {
+        const energy = coeff.value * coeff.value;
+        if (coeff.u === 0 && coeff.v === 0) continue;
+        if (coeff.u + coeff.v <= 3) low += energy;
+        else if (coeff.u + coeff.v <= 8) mid += energy;
+        else high += energy;
+        total += energy;
+      }
+    }
+  }
+
+  if (!total) return { lowFrequencyRatio: 0, midFrequencyRatio: 0, highFrequencyRatio: 0 };
+  return {
+    lowFrequencyRatio: low / total,
+    midFrequencyRatio: mid / total,
+    highFrequencyRatio: high / total
+  };
+}
+
+function dct8x8(pixels, width, startX, startY) {
+  const blockSize = 8;
+  const coeffs = [];
+  for (let u = 0; u < blockSize; u += 1) {
+    for (let v = 0; v < blockSize; v += 1) {
+      let sum = 0;
+      for (let x = 0; x < blockSize; x += 1) {
+        for (let y = 0; y < blockSize; y += 1) {
+          const pixel = pixels[(startY + y) * width + startX + x] - 0.5;
+          sum += pixel
+            * Math.cos(((2 * x + 1) * u * Math.PI) / 16)
+            * Math.cos(((2 * y + 1) * v * Math.PI) / 16);
+        }
+      }
+      const cu = u === 0 ? Math.SQRT1_2 : 1;
+      const cv = v === 0 ? Math.SQRT1_2 : 1;
+      coeffs.push({ u, v, value: 0.25 * cu * cv * sum });
+    }
+  }
+  return coeffs;
+}
+
+function computePeriodicity(values, width, height) {
+  const horizontal = averageLagCorrelation(values, width, height, 'x');
+  const vertical = averageLagCorrelation(values, width, height, 'y');
+  return { score: Math.max(horizontal, vertical) };
+}
+
+function averageLagCorrelation(values, width, height, axis) {
+  const lags = [4, 8, 12, 16];
+  let best = 0;
+  for (const lag of lags) {
+    const pairs = [];
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const nx = axis === 'x' ? x + lag : x;
+        const ny = axis === 'y' ? y + lag : y;
+        if (nx >= width || ny >= height) continue;
+        pairs.push([values[y * width + x], values[ny * width + nx]]);
+      }
+    }
+    best = Math.max(best, Math.abs(correlation(pairs)));
+  }
+  return best;
+}
+
+function correlation(pairs) {
+  if (pairs.length < 2) return 0;
+  const meanA = pairs.reduce((sum, pair) => sum + pair[0], 0) / pairs.length;
+  const meanB = pairs.reduce((sum, pair) => sum + pair[1], 0) / pairs.length;
+  let numerator = 0;
+  let denomA = 0;
+  let denomB = 0;
+  for (const [a, b] of pairs) {
+    const da = a - meanA;
+    const db = b - meanB;
+    numerator += da * db;
+    denomA += da * da;
+    denomB += db * db;
+  }
+  const denominator = Math.sqrt(denomA * denomB);
+  return denominator ? numerator / denominator : 0;
+}
+
+function variance(values) {
+  if (!values.length) return 0;
+  const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
+  return values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / values.length;
+}
+
+function kurtosis(values) {
+  if (!values.length) return 0;
+  const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
+  const second = values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / values.length;
+  if (!second) return 0;
+  const fourth = values.reduce((sum, value) => sum + (value - mean) ** 4, 0) / values.length;
+  return fourth / (second ** 2);
+}
+
+function roundMetric(value) {
+  return Number(value.toFixed(4));
 }
 
 async function walk(root, onFile) {

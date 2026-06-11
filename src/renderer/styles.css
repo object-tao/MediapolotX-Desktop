@@ -505,6 +505,24 @@ textarea {
   color: #667386;
 }
 
+.aiFileItem .frequencyRisk {
+  color: #4f5f73;
+  white-space: normal;
+}
+
+.aiFileItem .frequencyRisk.high {
+  color: #9b3a1b;
+  font-weight: 700;
+}
+
+.aiFileItem .frequencyRisk.medium {
+  color: #8a5a00;
+}
+
+.aiFileItem .frequencyRisk.unknown {
+  color: #7a8494;
+}
+
 .aiFileItem em {
   border-radius: 999px;
   font-size: 12px;

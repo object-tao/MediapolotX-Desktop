@@ -1496,6 +1496,12 @@ function AiToolFileList({ files, selectedPaths, onToggle, onSelectAll, onClear }
             <input type="checkbox" readOnly checked={selectedPaths.includes(file.absolutePath)} />
             <span>
               <strong>{file.relativePath}</strong>
+              <small>{formatAiDetectionSummary(file)}</small>
+              {file.frequencyAnalysis && (
+                <small className={`frequencyRisk ${file.frequencyAnalysis.level}`}>
+                  频域风险 {file.frequencyAnalysis.score}/100：{file.frequencyAnalysis.reasons?.[0]}
+                </small>
+              )}
               <small>{file.hasAiMarkers ? `检测到：${file.markers.join(', ')}` : '未检测到明显 AI 标识，仍会清理图片元数据'}</small>
             </span>
             <em className={file.hasAiMarkers ? 'detected' : 'clean'}>{file.extension.toUpperCase()}</em>
@@ -1505,6 +1511,14 @@ function AiToolFileList({ files, selectedPaths, onToggle, onSelectAll, onClear }
       </div>
     </div>
   );
+}
+
+function formatAiDetectionSummary(file) {
+  const parts = [];
+  if (file.markers?.length) parts.push(`显式标识：${file.markers.join(', ')}`);
+  if (file.platformAiRisk) parts.push('频域分析：小红书等平台可能提示“含 AI 生成内容”');
+  if (parts.length) return parts.join('；');
+  return '频域分析未发现明显平台 AI 风险';
 }
 
 function SimpleImageFileList({ title, files, selectedPaths, onToggle, onSelectAll, onClear }) {
