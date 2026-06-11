@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('mediapolotx', {
   openPath: (targetPath) => ipcRenderer.invoke('app:openPath', targetPath),
   selectDirectory: () => ipcRenderer.invoke('dialog:selectDirectory'),
   selectMarkdownFile: () => ipcRenderer.invoke('dialog:selectMarkdownFile'),
+  selectMediaFiles: () => ipcRenderer.invoke('dialog:selectMediaFiles'),
   storage: {
     add: (payload) => ipcRenderer.invoke('storage:add', payload),
     list: () => ipcRenderer.invoke('storage:list'),
@@ -49,6 +50,21 @@ contextBridge.exposeInMainWorld('mediapolotx', {
   content: {
     readMarkdownFile: (filePath) => ipcRenderer.invoke('content:readMarkdownFile', filePath),
     rewriteArticle: (payload) => ipcRenderer.invoke('content:rewriteArticle', payload)
+  },
+  social: {
+    platforms: () => ipcRenderer.invoke('social:platforms'),
+    listAccounts: () => ipcRenderer.invoke('social:listAccounts'),
+    saveAccount: (payload) => ipcRenderer.invoke('social:saveAccount', payload),
+    deleteAccount: (accountId) => ipcRenderer.invoke('social:deleteAccount', accountId),
+    openAccount: (payload) => ipcRenderer.invoke('social:openAccount', payload),
+    navigate: (payload) => ipcRenderer.invoke('social:navigate', payload),
+    setBounds: (bounds) => ipcRenderer.invoke('social:setBounds', bounds),
+    hideBrowser: () => ipcRenderer.invoke('social:hideBrowser'),
+    browserCommand: (payload) => ipcRenderer.invoke('social:browserCommand', payload),
+    exportCookies: (accountId) => ipcRenderer.invoke('social:exportCookies', accountId),
+    importCookies: (payload) => ipcRenderer.invoke('social:importCookies', payload),
+    clearCookies: (accountId) => ipcRenderer.invoke('social:clearCookies', accountId),
+    fillPublishForm: (payload) => ipcRenderer.invoke('social:fillPublishForm', payload)
   },
   settings: {
     getAll: () => ipcRenderer.invoke('settings:getAll'),

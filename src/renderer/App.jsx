@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const storageTypes = [
   { value: 'local', label: '本机目录' },
@@ -26,6 +26,11 @@ const articleLengthOptions = [
   { value: '短文', label: '短文' }
 ];
 
+const socialPlatformFallbacks = [
+  { value: 'xiaohongshu', label: '小红书' },
+  { value: 'wechat', label: '公众号' }
+];
+
 function providerLabel(providers, value) {
   return providers.find((provider) => provider.value === value)?.label || value;
 }
@@ -35,6 +40,7 @@ function cleanRemoteError(error) {
 }
 
 function App() {
+  const socialBrowserRef = useRef(null);
   const [appStatus, setAppStatus] = useState(null);
   const [activeView, setActiveView] = useState('library');
   const [storages, setStorages] = useState([]);
@@ -126,6 +132,25 @@ function App() {
     maxTokens: 4096
   });
   const [articleResult, setArticleResult] = useState(null);
+  const [socialPlatforms, setSocialPlatforms] = useState(socialPlatformFallbacks);
+  const [socialAccounts, setSocialAccounts] = useState([]);
+  const [selectedSocialAccountId, setSelectedSocialAccountId] = useState('');
+  const [socialAccountForm, setSocialAccountForm] = useState({
+    platform: 'xiaohongshu',
+    nickname: '',
+    platformUserId: '',
+    groupName: '默认分组',
+    remark: '',
+    avatarUrl: ''
+  });
+  const [socialBrowserState, setSocialBrowserState] = useState({ url: '', title: '', canGoBack: false, canGoForward: false });
+  const [cookieText, setCookieText] = useState('');
+  const [publishForm, setPublishForm] = useState({
+    title: '',
+    content: '',
+    tags: '',
+    mediaPaths: []
+  });
   const [aiProviders, setAiProviders] = useState([]);
   const [aiStore, setAiStore] = useState({ models: [], defaultTextModelId: '', defaultVisionModelId: '' });
   const [editingAiModel, setEditingAiModel] = useState(null);
@@ -145,6 +170,10 @@ function App() {
 
   const selectedImages = selectedFiles.filter((file) => file.fileType === 'image');
   const selectedVideos = selectedFiles.filter((file) => file.fileType === 'video');
+  const selectedSocialAccount = useMemo(
+    () => socialAccounts.find((account) => account.id === selectedSocialAccountId) || null,
+    [socialAccounts, selectedSocialAccountId]
+  );
 
   const loadFiles = useCallback(async (storageId = selectedStorageId) => {
     if (!storageId) return;
@@ -167,6 +196,12 @@ function App() {
     setTasks(list);
   }, []);
 
+  const refreshSocialAccounts = useCallback(async () => {
+    const list = await window.mediapolotx.social.listAccounts();
+    setSocialAccounts(list);
+    setSelectedSocialAccountId((current) => current || list[0]?.id || '');
+  }, []);
+
   const loadAiStore = useCallback(async () => {
     const store = await window.mediapolotx.aiConfig.get();
     setAiStore(store);
@@ -178,9 +213,21 @@ function App() {
     });
   }, []);
 
+  const getSocialBrowserBounds = useCallback(() => {
+    const rect = socialBrowserRef.current?.getBoundingClientRect();
+    if (!rect) return null;
+    return {
+      x: rect.left,
+      y: rect.top,
+      width: rect.width,
+      height: rect.height
+    };
+  }, []);
+
   useEffect(() => {
     window.mediapolotx.getStatus().then(setAppStatus);
     window.mediapolotx.aiConfig.providers().then(setAiProviders);
+    window.mediapolotx.social.platforms().then(setSocialPlatforms).catch(() => setSocialPlatforms(socialPlatformFallbacks));
     loadAiStore();
     window.mediapolotx.settings.getAll().then((settings) => {
       if (settings.syncOptions) setSyncOptions(settings.syncOptions);
@@ -193,6 +240,7 @@ function App() {
     });
     refreshStorages();
     refreshTasks();
+    refreshSocialAccounts();
 
     const off = window.mediapolotx.scanner.onEvent((event) => {
       setMessage(`监听事件：${event.type}`);
@@ -211,11 +259,128 @@ function App() {
       offAiProgress();
       offDuplicateProgress();
     };
-  }, [loadAiStore, loadFiles, refreshStorages, refreshTasks, selectedStorageId]);
+  }, [loadAiStore, loadFiles, refreshSocialAccounts, refreshStorages, refreshTasks, selectedStorageId]);
+
+  useEffect(() => {
+    if (activeView !== 'socialAccounts' && activeView !== 'oneClickPublish') {
+      window.mediapolotx.social.hideBrowser();
+    }
+  }, [activeView]);
+
+  useEffect(() => {
+    function syncBounds() {
+      const bounds = getSocialBrowserBounds();
+      if (bounds && (activeView === 'socialAccounts' || activeView === 'oneClickPublish')) {
+        window.mediapolotx.social.setBounds(bounds);
+      }
+    }
+    syncBounds();
+    window.addEventListener('resize', syncBounds);
+    return () => window.removeEventListener('resize', syncBounds);
+  }, [activeView, getSocialBrowserBounds, selectedSocialAccountId]);
 
   async function selectDirectory(setter) {
     const basePath = await window.mediapolotx.selectDirectory();
     if (basePath) setter(basePath);
+  }
+
+  async function selectSocialMediaFiles() {
+    const mediaPaths = await window.mediapolotx.selectMediaFiles();
+    if (mediaPaths.length) setPublishForm((current) => ({ ...current, mediaPaths }));
+  }
+
+  async function saveSocialAccount(event) {
+    event.preventDefault();
+    setBusy(true);
+    try {
+      const saved = await window.mediapolotx.social.saveAccount(socialAccountForm);
+      await refreshSocialAccounts();
+      setSelectedSocialAccountId(saved.id);
+      setSocialAccountForm({
+        platform: socialAccountForm.platform,
+        nickname: '',
+        platformUserId: '',
+        groupName: '默认分组',
+        remark: '',
+        avatarUrl: ''
+      });
+      setMessage('账号已保存');
+    } catch (error) {
+      setMessage(`账号保存失败：${cleanRemoteError(error)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteSocialAccount(accountId) {
+    if (!accountId) return;
+    setBusy(true);
+    try {
+      const list = await window.mediapolotx.social.deleteAccount(accountId);
+      setSocialAccounts(list);
+      setSelectedSocialAccountId(list[0]?.id || '');
+      setMessage('账号已删除');
+    } catch (error) {
+      setMessage(`删除账号失败：${cleanRemoteError(error)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function openSocialAccount(account = selectedSocialAccount, target = 'homeUrl') {
+    if (!account) return;
+    const bounds = getSocialBrowserBounds();
+    if (!bounds) return;
+    const state = target === 'homeUrl'
+      ? await window.mediapolotx.social.openAccount({ accountId: account.id, bounds })
+      : await window.mediapolotx.social.navigate({ accountId: account.id, target, bounds });
+    setSelectedSocialAccountId(account.id);
+    setSocialBrowserState(state);
+  }
+
+  async function socialBrowserCommand(command) {
+    if (!selectedSocialAccount) return;
+    const state = await window.mediapolotx.social.browserCommand({ accountId: selectedSocialAccount.id, command });
+    setSocialBrowserState(state);
+  }
+
+  async function exportSocialCookies() {
+    if (!selectedSocialAccount) return;
+    const cookies = await window.mediapolotx.social.exportCookies(selectedSocialAccount.id);
+    setCookieText(JSON.stringify(cookies, null, 2));
+    setMessage(`已导出 ${cookies.length} 条 Cookie`);
+  }
+
+  async function importSocialCookies() {
+    if (!selectedSocialAccount || !cookieText.trim()) return;
+    try {
+      const result = await window.mediapolotx.social.importCookies({
+        accountId: selectedSocialAccount.id,
+        cookies: cookieText
+      });
+      setMessage(`已导入 ${result.count} 条 Cookie`);
+      await openSocialAccount(selectedSocialAccount);
+    } catch (error) {
+      setMessage(`Cookie 导入失败：${cleanRemoteError(error)}`);
+    }
+  }
+
+  async function clearSocialCookies() {
+    if (!selectedSocialAccount) return;
+    await window.mediapolotx.social.clearCookies(selectedSocialAccount.id);
+    setCookieText('');
+    setMessage('Cookie/session 已清理');
+    await openSocialAccount(selectedSocialAccount);
+  }
+
+  async function openPublishPageAndFill() {
+    if (!selectedSocialAccount) return;
+    await openSocialAccount(selectedSocialAccount, 'publishUrl');
+    const result = await window.mediapolotx.social.fillPublishForm({
+      accountId: selectedSocialAccount.id,
+      form: publishForm
+    });
+    setMessage(`已尝试填充：标题 ${result.titleFilled ? '成功' : '未匹配'}，正文 ${result.contentFilled ? '成功' : '未匹配'}，标签 ${result.tagsFilled ? '成功' : '未匹配'}。请人工确认后发布。`);
   }
 
   async function addStorage(event) {
@@ -692,6 +857,8 @@ function App() {
           <button className={`navItem ${activeView === 'image' ? 'active' : ''}`} onClick={() => setActiveView('image')}>图片处理</button>
           <button className={`navItem ${activeView === 'video' ? 'active' : ''}`} onClick={() => setActiveView('video')}>视频封面</button>
           <button className={`navItem ${activeView === 'sync' ? 'active' : ''}`} onClick={() => setActiveView('sync')}>任务同步</button>
+          <button className={`navItem ${activeView === 'socialAccounts' ? 'active' : ''}`} onClick={() => setActiveView('socialAccounts')}>账号管理</button>
+          <button className={`navItem ${activeView === 'oneClickPublish' ? 'active' : ''}`} onClick={() => setActiveView('oneClickPublish')}>一键发布</button>
           <div className="navGroup">
             <div className="navGroupTitle">工具集</div>
             <button className={`navItem subItem ${activeView === 'removeAiMark' ? 'active' : ''}`} onClick={() => setActiveView('removeAiMark')}>去AI标识</button>
@@ -892,6 +1059,130 @@ function App() {
               </div>
             </div>
             <TaskList tasks={tasks} onOpenPath={openPath} />
+          </section>
+        )}
+
+        {activeView === 'socialAccounts' && (
+          <section className="socialShell">
+            <div className="panel socialAccountPanel">
+              <h2>添加账号</h2>
+              <form className="form" onSubmit={saveSocialAccount}>
+                <label>
+                  平台
+                  <select value={socialAccountForm.platform} onChange={(event) => setSocialAccountForm({ ...socialAccountForm, platform: event.target.value })}>
+                    {socialPlatforms.map((platform) => <option key={platform.value} value={platform.value}>{platform.label}</option>)}
+                  </select>
+                </label>
+                <label>
+                  昵称
+                  <input value={socialAccountForm.nickname} onChange={(event) => setSocialAccountForm({ ...socialAccountForm, nickname: event.target.value })} placeholder="账号昵称" />
+                </label>
+                <label>
+                  平台 ID
+                  <input value={socialAccountForm.platformUserId} onChange={(event) => setSocialAccountForm({ ...socialAccountForm, platformUserId: event.target.value })} placeholder="小红书号/公众号原始ID等" />
+                </label>
+                <label>
+                  分组
+                  <input value={socialAccountForm.groupName} onChange={(event) => setSocialAccountForm({ ...socialAccountForm, groupName: event.target.value })} />
+                </label>
+                <label>
+                  备注
+                  <input value={socialAccountForm.remark} onChange={(event) => setSocialAccountForm({ ...socialAccountForm, remark: event.target.value })} />
+                </label>
+                <button type="submit" disabled={busy || !socialAccountForm.nickname}>保存账号</button>
+              </form>
+              <SocialAccountList
+                accounts={socialAccounts}
+                platforms={socialPlatforms}
+                selectedId={selectedSocialAccountId}
+                onSelect={(account) => {
+                  setSelectedSocialAccountId(account.id);
+                  openSocialAccount(account);
+                }}
+                onDelete={deleteSocialAccount}
+              />
+            </div>
+            <div className="panel socialBrowserPanel">
+              <SocialBrowserToolbar
+                account={selectedSocialAccount}
+                state={socialBrowserState}
+                onHome={() => openSocialAccount(selectedSocialAccount, 'homeUrl')}
+                onPublish={() => openSocialAccount(selectedSocialAccount, 'publishUrl')}
+                onWorks={() => openSocialAccount(selectedSocialAccount, 'worksUrl')}
+                onData={() => openSocialAccount(selectedSocialAccount, 'dataUrl')}
+                onBack={() => socialBrowserCommand('back')}
+                onForward={() => socialBrowserCommand('forward')}
+                onReload={() => socialBrowserCommand('reload')}
+              />
+              <div className="socialBrowserHost" ref={socialBrowserRef}>
+                {!selectedSocialAccount && <div className="empty">请选择或添加账号</div>}
+              </div>
+              <div className="cookiePanel">
+                <div className="actions actionWrap">
+                  <button type="button" onClick={exportSocialCookies} disabled={!selectedSocialAccount}>导出 Cookie</button>
+                  <button type="button" onClick={importSocialCookies} disabled={!selectedSocialAccount || !cookieText.trim()}>导入 Cookie</button>
+                  <button type="button" className="dangerButton" onClick={clearSocialCookies} disabled={!selectedSocialAccount}>清理登录态</button>
+                </div>
+                <textarea value={cookieText} onChange={(event) => setCookieText(event.target.value)} placeholder="Cookie JSON，导出后可保存，导入时粘贴到这里" />
+              </div>
+            </div>
+          </section>
+        )}
+
+        {activeView === 'oneClickPublish' && (
+          <section className="contentGrid wideRight">
+            <div className="panel">
+              <h2>一键发布辅助</h2>
+              <div className="toolIntro">
+                <p>选择账号后打开对应平台发布页，自动尝试填充标题、正文和标签；最终发布由你人工确认。</p>
+              </div>
+              <div className="form">
+                <label>
+                  发布账号
+                  <select value={selectedSocialAccountId} onChange={(event) => setSelectedSocialAccountId(event.target.value)}>
+                    <option value="">请选择账号</option>
+                    {socialAccounts.map((account) => (
+                      <option key={account.id} value={account.id}>{account.nickname} / {platformLabel(socialPlatforms, account.platform)}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  标题
+                  <input value={publishForm.title} onChange={(event) => setPublishForm({ ...publishForm, title: event.target.value })} />
+                </label>
+                <label>
+                  正文
+                  <textarea className="largeTextarea" value={publishForm.content} onChange={(event) => setPublishForm({ ...publishForm, content: event.target.value })} />
+                </label>
+                <label>
+                  标签/话题
+                  <input value={publishForm.tags} onChange={(event) => setPublishForm({ ...publishForm, tags: event.target.value })} placeholder="#外贸 #海关" />
+                </label>
+                <div className="actions actionWrap">
+                  <button type="button" onClick={selectSocialMediaFiles}>选择图片/视频</button>
+                  <button type="button" onClick={openPublishPageAndFill} disabled={!selectedSocialAccount || busy}>打开发布页并填充</button>
+                </div>
+                <div className="resultList">
+                  <span><strong>已选素材</strong>{publishForm.mediaPaths.length ? publishForm.mediaPaths.join('\n') : '暂未选择。当前版本会打开发布页并填充文本，素材上传请在平台页面人工选择。'}</span>
+                </div>
+              </div>
+            </div>
+            <div className="panel socialBrowserPanel">
+              <SocialBrowserToolbar
+                account={selectedSocialAccount}
+                state={socialBrowserState}
+                onHome={() => openSocialAccount(selectedSocialAccount, 'homeUrl')}
+                onPublish={() => openSocialAccount(selectedSocialAccount, 'publishUrl')}
+                onWorks={() => openSocialAccount(selectedSocialAccount, 'worksUrl')}
+                onData={() => openSocialAccount(selectedSocialAccount, 'dataUrl')}
+                onBack={() => socialBrowserCommand('back')}
+                onForward={() => socialBrowserCommand('forward')}
+                onReload={() => socialBrowserCommand('reload')}
+              />
+              <div className="socialBrowserHost" ref={socialBrowserRef}>
+                {!selectedSocialAccount && <div className="empty">请选择账号后打开发布页</div>}
+              </div>
+            </div>
           </section>
         )}
 
@@ -1349,16 +1640,18 @@ function App() {
           </section>
         )}
 
-        <FileTable
-          files={files}
-          selectedFileIds={selectedFileIds}
-          selectedStorage={selectedStorage}
-          onToggle={toggleFile}
-          onSelectAll={selectAllVisible}
-          onClear={clearSelection}
-        />
+        {!['socialAccounts', 'oneClickPublish'].includes(activeView) && (
+          <FileTable
+            files={files}
+            selectedFileIds={selectedFileIds}
+            selectedStorage={selectedStorage}
+            onToggle={toggleFile}
+            onSelectAll={selectAllVisible}
+            onClear={clearSelection}
+          />
+        )}
 
-        {activeView !== 'sync' && <TaskList tasks={tasks} compact onOpenPath={openPath} />}
+        {!['sync', 'socialAccounts', 'oneClickPublish'].includes(activeView) && <TaskList tasks={tasks} compact onOpenPath={openPath} />}
         {message && <div className="toast">{message}</div>}
       </main>
     </div>
@@ -1521,6 +1814,66 @@ function formatAiDetectionSummary(file) {
   return '频域分析未发现明显平台 AI 风险';
 }
 
+function SocialAccountList({ accounts, platforms, selectedId, onSelect, onDelete }) {
+  const groups = accounts.reduce((map, account) => {
+    const groupName = account.groupName || '默认分组';
+    if (!map.has(groupName)) map.set(groupName, []);
+    map.get(groupName).push(account);
+    return map;
+  }, new Map());
+
+  return (
+    <div className="socialAccountList">
+      {[...groups.entries()].map(([groupName, groupAccounts]) => (
+        <div key={groupName} className="socialGroup">
+          <strong>{groupName} ({groupAccounts.length})</strong>
+          {groupAccounts.map((account) => (
+            <button
+              type="button"
+              key={account.id}
+              className={`socialAccountItem ${selectedId === account.id ? 'selected' : ''}`}
+              onClick={() => onSelect(account)}
+            >
+              <span className="socialAvatar">{account.avatarUrl ? <img src={account.avatarUrl} alt="" /> : platformLabel(platforms, account.platform).slice(0, 1)}</span>
+              <span>
+                <strong>{account.nickname}</strong>
+                <small>{platformLabel(platforms, account.platform)} {account.platformUserId || ''}</small>
+                {account.remark && <small>{account.remark}</small>}
+              </span>
+              <em onClick={(event) => {
+                event.stopPropagation();
+                onDelete(account.id);
+              }}>删除</em>
+            </button>
+          ))}
+        </div>
+      ))}
+      {accounts.length === 0 && <div className="empty">暂无账号</div>}
+    </div>
+  );
+}
+
+function SocialBrowserToolbar({ account, state, onHome, onPublish, onWorks, onData, onBack, onForward, onReload }) {
+  return (
+    <div className="socialToolbar">
+      <div className="actions actionWrap">
+        <button type="button" onClick={onBack} disabled={!account || !state.canGoBack}>后退</button>
+        <button type="button" onClick={onForward} disabled={!account || !state.canGoForward}>前进</button>
+        <button type="button" onClick={onReload} disabled={!account}>刷新</button>
+        <button type="button" onClick={onHome} disabled={!account}>主页</button>
+        <button type="button" onClick={onPublish} disabled={!account}>发布</button>
+        <button type="button" onClick={onWorks} disabled={!account}>作品</button>
+        <button type="button" onClick={onData} disabled={!account}>数据</button>
+      </div>
+      <div className="socialAddress">{state.url || '未打开平台后台'}</div>
+    </div>
+  );
+}
+
+function platformLabel(platforms, value) {
+  return platforms.find((platform) => platform.value === value)?.label || value;
+}
+
 function SimpleImageFileList({ title, files, selectedPaths, onToggle, onSelectAll, onClear }) {
   return (
     <div className="panel">
@@ -1593,6 +1946,8 @@ function viewTitle(activeView) {
   if (activeView === 'image') return '图片批量处理';
   if (activeView === 'video') return '视频封面处理';
   if (activeView === 'sync') return 'Web 协同';
+  if (activeView === 'socialAccounts') return '账号管理';
+  if (activeView === 'oneClickPublish') return '一键发布';
   if (activeView === 'removeAiMark') return '去AI标识';
   if (activeView === 'imageDuplicate') return '图片复制';
   if (activeView === 'wechatMarkdown') return '公众号转MD';
@@ -1605,6 +1960,8 @@ function viewSubtitle(activeView) {
   if (activeView === 'image') return '对选中的图片执行尺寸调整、压缩、EXIF 清理和模板渲染。';
   if (activeView === 'video') return '从选中的视频中截取封面，并生成横竖屏适配结果。';
   if (activeView === 'sync') return '连接 MediapolotX Web，获取任务队列并回传处理状态。';
+  if (activeView === 'socialAccounts') return '管理公众号和小红书账号，使用独立 Cookie/session 打开真实平台后台。';
+  if (activeView === 'oneClickPublish') return '打开平台发布页并自动填充标题、正文和标签，最终发布由人工确认。';
   if (activeView === 'removeAiMark') return '工具集能力：面向图片中的 AI 标识、水印和平台痕迹处理。';
   if (activeView === 'imageDuplicate') return '按参数组合批量生成多套轻微不同的图片副本。';
   if (activeView === 'wechatMarkdown') return '下载微信公众号文章并保存为 Markdown 文件。';

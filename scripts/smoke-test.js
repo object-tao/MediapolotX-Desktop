@@ -12,6 +12,7 @@ const imageDuplicator = require('../src/modules/imageDuplicator');
 const wechatMpMarkdown = require('../src/modules/wechatMpMarkdown');
 const articleRewriter = require('../src/modules/articleRewriter');
 const { createAiConfigManager } = require('../src/modules/aiConfigManager');
+const { createSocialAccountManager } = require('../src/modules/socialAccountManager');
 
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mediapolotx-smoke-'));
 const dbPath = path.join(tempRoot, 'smoke.sqlite');
@@ -245,6 +246,26 @@ try {
     || !rewriteResult.markdown.includes('测试摘要')
   ) {
     throw new Error('Article rewrite smoke test failed.');
+  }
+
+  const socialAccountManager = createSocialAccountManager(settingsManager);
+  const socialAccount = socialAccountManager.saveAccount({
+    platform: 'xiaohongshu',
+    nickname: 'Smoke XHS',
+    platformUserId: 'xhs-1',
+    groupName: 'Smoke',
+    remark: 'test'
+  });
+  if (
+    !socialAccount.id
+    || socialAccountManager.listAccounts().length !== 1
+    || socialAccountManager.getPlatform('wechat').label !== '公众号'
+  ) {
+    throw new Error('Social account smoke test failed.');
+  }
+  socialAccountManager.deleteAccount(socialAccount.id);
+  if (socialAccountManager.listAccounts().length !== 0) {
+    throw new Error('Social account delete smoke test failed.');
   }
 
   db.close();

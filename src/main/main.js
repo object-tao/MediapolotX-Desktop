@@ -1,5 +1,5 @@
 const path = require('node:path');
-const { app, BrowserWindow, dialog, ipcMain, shell, safeStorage } = require('electron');
+const { app, BrowserView, BrowserWindow, dialog, ipcMain, shell, safeStorage, session } = require('electron');
 const config = require('../config/default');
 const { createDatabase } = require('../modules/db');
 const { createStorageManager } = require('../modules/storageManager');
@@ -12,6 +12,7 @@ const imageDuplicator = require('../modules/imageDuplicator');
 const wechatMpMarkdown = require('../modules/wechatMpMarkdown');
 const articleRewriter = require('../modules/articleRewriter');
 const { createAiConfigManager } = require('../modules/aiConfigManager');
+const { createSocialAccountManager } = require('../modules/socialAccountManager');
 const { createLogger } = require('../utils/logger');
 
 let mainWindow;
@@ -21,8 +22,11 @@ let fileScanner;
 let taskManager;
 let settingsManager;
 let aiConfigManager;
+let socialAccountManager;
 let logger;
 const watchers = new Map();
+const socialBrowserViews = new Map();
+let activeSocialViewId = null;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -56,6 +60,7 @@ async function bootstrapServices() {
   taskManager = createTaskManager(db, logger, fileScanner);
   settingsManager = createSettingsManager(db);
   aiConfigManager = createAiConfigManager(settingsManager, safeStorage);
+  socialAccountManager = createSocialAccountManager(settingsManager);
 }
 
 function registerIpc() {
@@ -81,6 +86,17 @@ function registerIpc() {
       ]
     });
     return result.canceled ? null : result.filePaths[0];
+  });
+
+  ipcMain.handle('dialog:selectMediaFiles', async () => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openFile', 'multiSelections'],
+      filters: [
+        { name: 'Media', extensions: ['jpg', 'jpeg', 'png', 'webp', 'mp4', 'mov'] },
+        { name: 'All Files', extensions: ['*'] }
+      ]
+    });
+    return result.canceled ? [] : result.filePaths;
   });
 
   ipcMain.handle('app:openPath', async (_event, targetPath) => {
@@ -178,6 +194,88 @@ function registerIpc() {
     articleRewriter.rewriteArticle(payload, (options) => aiConfigManager.completeText(options))
   ));
 
+  ipcMain.handle('social:platforms', () => socialAccountManager.platforms());
+
+  ipcMain.handle('social:listAccounts', () => socialAccountManager.listAccounts());
+
+  ipcMain.handle('social:saveAccount', (_event, payload) => socialAccountManager.saveAccount(payload));
+
+  ipcMain.handle('social:deleteAccount', async (_event, accountId) => {
+    hideSocialBrowser(accountId);
+    const view = socialBrowserViews.get(accountId);
+    view?.webContents.close();
+    socialBrowserViews.delete(accountId);
+    return socialAccountManager.deleteAccount(accountId);
+  });
+
+  ipcMain.handle('social:openAccount', async (_event, payload) => {
+    const account = socialAccountManager.getAccount(payload.accountId);
+    if (!account) throw new Error('账号不存在');
+    const platform = socialAccountManager.getPlatform(account.platform);
+    const view = getSocialBrowserView(account.id);
+    activeSocialViewId = account.id;
+    mainWindow.setBrowserView(view);
+    applySocialBrowserBounds(payload.bounds);
+    await view.webContents.loadURL(payload.url || platform.homeUrl);
+    return getSocialBrowserState(view);
+  });
+
+  ipcMain.handle('social:navigate', async (_event, payload) => {
+    const account = socialAccountManager.getAccount(payload.accountId);
+    if (!account) throw new Error('账号不存在');
+    const platform = socialAccountManager.getPlatform(account.platform);
+    const view = getSocialBrowserView(account.id);
+    const targetUrl = platform[payload.target] || payload.url || platform.homeUrl;
+    activeSocialViewId = account.id;
+    mainWindow.setBrowserView(view);
+    applySocialBrowserBounds(payload.bounds);
+    await view.webContents.loadURL(targetUrl);
+    return getSocialBrowserState(view);
+  });
+
+  ipcMain.handle('social:setBounds', (_event, bounds) => {
+    applySocialBrowserBounds(bounds);
+    return { ok: true };
+  });
+
+  ipcMain.handle('social:hideBrowser', () => {
+    if (activeSocialViewId) hideSocialBrowser(activeSocialViewId);
+    return { ok: true };
+  });
+
+  ipcMain.handle('social:browserCommand', (_event, payload) => {
+    const view = getSocialBrowserView(payload.accountId);
+    if (payload.command === 'back' && view.webContents.canGoBack()) view.webContents.goBack();
+    if (payload.command === 'forward' && view.webContents.canGoForward()) view.webContents.goForward();
+    if (payload.command === 'reload') view.webContents.reload();
+    return getSocialBrowserState(view);
+  });
+
+  ipcMain.handle('social:exportCookies', async (_event, accountId) => {
+    const accountSession = session.fromPartition(getSocialPartition(accountId));
+    return accountSession.cookies.get({});
+  });
+
+  ipcMain.handle('social:importCookies', async (_event, payload) => {
+    const accountSession = session.fromPartition(getSocialPartition(payload.accountId));
+    const cookies = Array.isArray(payload.cookies) ? payload.cookies : JSON.parse(payload.cookies || '[]');
+    for (const cookie of cookies) {
+      await accountSession.cookies.set(normalizeCookieForSet(cookie));
+    }
+    return { count: cookies.length };
+  });
+
+  ipcMain.handle('social:clearCookies', async (_event, accountId) => {
+    const accountSession = session.fromPartition(getSocialPartition(accountId));
+    await accountSession.clearStorageData();
+    return { ok: true };
+  });
+
+  ipcMain.handle('social:fillPublishForm', async (_event, payload) => {
+    const view = getSocialBrowserView(payload.accountId);
+    return view.webContents.executeJavaScript(buildPublishFillScript(payload.form || {}), true);
+  });
+
   ipcMain.handle('settings:getAll', () => settingsManager.all());
 
   ipcMain.handle('settings:set', (_event, payload) => settingsManager.set(payload.key, payload.value));
@@ -251,3 +349,122 @@ app.on('before-quit', async () => {
   await Promise.all([...watchers.values()].map((watcher) => watcher.close()));
   db?.close();
 });
+
+function getSocialBrowserView(accountId) {
+  const existing = socialBrowserViews.get(accountId);
+  if (existing && !existing.webContents.isDestroyed()) return existing;
+
+  const view = new BrowserView({
+    webPreferences: {
+      partition: getSocialPartition(accountId),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true
+    }
+  });
+  view.webContents.setWindowOpenHandler(({ url }) => {
+    view.webContents.loadURL(url);
+    return { action: 'deny' };
+  });
+  socialBrowserViews.set(accountId, view);
+  return view;
+}
+
+function getSocialPartition(accountId) {
+  return `persist:social-account-${accountId}`;
+}
+
+function applySocialBrowserBounds(bounds = {}) {
+  if (!activeSocialViewId) return;
+  const view = socialBrowserViews.get(activeSocialViewId);
+  if (!view) return;
+  const normalized = {
+    x: Math.max(0, Math.round(Number(bounds.x || 0))),
+    y: Math.max(0, Math.round(Number(bounds.y || 0))),
+    width: Math.max(320, Math.round(Number(bounds.width || 900))),
+    height: Math.max(240, Math.round(Number(bounds.height || 600)))
+  };
+  view.setBounds(normalized);
+  view.setAutoResize({ width: true, height: true });
+}
+
+function hideSocialBrowser(accountId) {
+  const view = socialBrowserViews.get(accountId);
+  if (view && mainWindow?.getBrowserView() === view) {
+    mainWindow.removeBrowserView(view);
+  }
+  if (activeSocialViewId === accountId) activeSocialViewId = null;
+}
+
+function getSocialBrowserState(view) {
+  return {
+    url: view.webContents.getURL(),
+    title: view.webContents.getTitle(),
+    canGoBack: view.webContents.canGoBack(),
+    canGoForward: view.webContents.canGoForward()
+  };
+}
+
+function normalizeCookieForSet(cookie) {
+  const protocol = cookie.secure ? 'https://' : 'http://';
+  const domain = String(cookie.domain || '').replace(/^\./, '');
+  return {
+    url: cookie.url || `${protocol}${domain}${cookie.path || '/'}`,
+    name: cookie.name,
+    value: cookie.value,
+    domain: cookie.domain,
+    path: cookie.path || '/',
+    secure: Boolean(cookie.secure),
+    httpOnly: Boolean(cookie.httpOnly),
+    expirationDate: cookie.expirationDate
+  };
+}
+
+function buildPublishFillScript(form) {
+  const safeForm = JSON.stringify({
+    title: form.title || '',
+    content: form.content || '',
+    tags: form.tags || ''
+  });
+  return `
+    (() => {
+      const form = ${safeForm};
+      const visible = (element) => {
+        const rect = element.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+      };
+      const setNativeValue = (element, value) => {
+        const descriptor = Object.getOwnPropertyDescriptor(element.constructor.prototype, 'value');
+        if (descriptor?.set) descriptor.set.call(element, value);
+        else element.value = value;
+        element.dispatchEvent(new Event('input', { bubbles: true }));
+        element.dispatchEvent(new Event('change', { bubbles: true }));
+      };
+      const fillInput = (keywords, value) => {
+        if (!value) return false;
+        const elements = [...document.querySelectorAll('input, textarea')].filter(visible);
+        const target = elements.find((element) => {
+          const text = [element.placeholder, element.ariaLabel, element.name, element.id].join(' ').toLowerCase();
+          return keywords.some((keyword) => text.includes(keyword));
+        }) || elements.find((element) => !element.value);
+        if (!target) return false;
+        setNativeValue(target, value);
+        return true;
+      };
+      const fillEditable = (value) => {
+        if (!value) return false;
+        const editable = [...document.querySelectorAll('[contenteditable="true"]')].filter(visible)[0];
+        if (!editable) return false;
+        editable.focus();
+        document.execCommand('selectAll', false, null);
+        document.execCommand('insertText', false, value);
+        editable.dispatchEvent(new Event('input', { bubbles: true }));
+        return true;
+      };
+      const titleFilled = fillInput(['title', '标题', '请输入标题'], form.title);
+      const contentFilled = fillEditable(form.content) || fillInput(['content', '正文', '描述', '请输入正文'], form.content);
+      const tagsFilled = fillInput(['tag', '话题', '标签'], form.tags);
+      return { titleFilled, contentFilled, tagsFilled };
+    })();
+  `;
+}
