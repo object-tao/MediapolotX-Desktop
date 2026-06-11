@@ -44,6 +44,37 @@ const mediaPlatformCards = [
   { value: 'custom', label: '自定义平台', icon: '+', enabled: false }
 ];
 
+const primaryNavItems = [
+  { view: 'library', label: '素材库', shortLabel: '素' },
+  { view: 'image', label: '图片处理', shortLabel: '图' },
+  { view: 'video', label: '视频封面', shortLabel: '视' },
+  { view: 'sync', label: '任务同步', shortLabel: '同' },
+  { view: 'socialAccounts', label: '账号管理', shortLabel: '账' },
+  { view: 'oneClickPublish', label: '一键发布', shortLabel: '发' }
+];
+
+const groupedNavItems = [
+  {
+    title: '工具集',
+    shortTitle: '工',
+    items: [
+      { view: 'removeAiMark', label: '去AI标识', shortLabel: 'AI' },
+      { view: 'imageDuplicate', label: '图片复制', shortLabel: '复' },
+      { view: 'wechatMarkdown', label: '公众号转MD', shortLabel: 'MD' }
+    ]
+  },
+  {
+    title: '内容创作',
+    shortTitle: '创',
+    items: [{ view: 'articleRewrite', label: '文章重写', shortLabel: '文' }]
+  },
+  {
+    title: '基础配置',
+    shortTitle: '配',
+    items: [{ view: 'aiModelConfig', label: 'AI模型配置', shortLabel: '模' }]
+  }
+];
+
 function providerLabel(providers, value) {
   return providers.find((provider) => provider.value === value)?.label || value;
 }
@@ -56,6 +87,7 @@ function App() {
   const socialBrowserRef = useRef(null);
   const [appStatus, setAppStatus] = useState(null);
   const [activeView, setActiveView] = useState('library');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [storages, setStorages] = useState([]);
   const [selectedStorageId, setSelectedStorageId] = useState('');
   const [files, setFiles] = useState([]);
@@ -884,37 +916,54 @@ function App() {
   }
 
   return (
-    <div className="shell">
+    <div className={`shell ${sidebarCollapsed ? 'sidebarCollapsed' : ''}`}>
       <aside className="sidebar">
         <div className="brand">
-          <strong>MediapolotX</strong>
-          <span>Desktop</span>
+          <div>
+            <strong>{sidebarCollapsed ? 'MX' : 'MediapolotX'}</strong>
+            {!sidebarCollapsed && <span>Desktop</span>}
+          </div>
+          <button
+            type="button"
+            className="sidebarToggle"
+            onClick={() => setSidebarCollapsed((current) => !current)}
+            title={sidebarCollapsed ? '展开菜单' : '收起菜单'}
+          >
+            {sidebarCollapsed ? '»' : '«'}
+          </button>
         </div>
         <nav>
-          <button className={`navItem ${activeView === 'library' ? 'active' : ''}`} onClick={() => setActiveView('library')}>素材库</button>
-          <button className={`navItem ${activeView === 'image' ? 'active' : ''}`} onClick={() => setActiveView('image')}>图片处理</button>
-          <button className={`navItem ${activeView === 'video' ? 'active' : ''}`} onClick={() => setActiveView('video')}>视频封面</button>
-          <button className={`navItem ${activeView === 'sync' ? 'active' : ''}`} onClick={() => setActiveView('sync')}>任务同步</button>
-          <button className={`navItem ${activeView === 'socialAccounts' ? 'active' : ''}`} onClick={() => setActiveView('socialAccounts')}>账号管理</button>
-          <button className={`navItem ${activeView === 'oneClickPublish' ? 'active' : ''}`} onClick={() => setActiveView('oneClickPublish')}>一键发布</button>
-          <div className="navGroup">
-            <div className="navGroupTitle">工具集</div>
-            <button className={`navItem subItem ${activeView === 'removeAiMark' ? 'active' : ''}`} onClick={() => setActiveView('removeAiMark')}>去AI标识</button>
-            <button className={`navItem subItem ${activeView === 'imageDuplicate' ? 'active' : ''}`} onClick={() => setActiveView('imageDuplicate')}>图片复制</button>
-            <button className={`navItem subItem ${activeView === 'wechatMarkdown' ? 'active' : ''}`} onClick={() => setActiveView('wechatMarkdown')}>公众号转MD</button>
-          </div>
-          <div className="navGroup">
-            <div className="navGroupTitle">内容创作</div>
-            <button className={`navItem subItem ${activeView === 'articleRewrite' ? 'active' : ''}`} onClick={() => setActiveView('articleRewrite')}>文章重写</button>
-          </div>
-          <div className="navGroup">
-            <div className="navGroupTitle">基础配置</div>
-            <button className={`navItem subItem ${activeView === 'aiModelConfig' ? 'active' : ''}`} onClick={() => setActiveView('aiModelConfig')}>AI模型配置</button>
-          </div>
+          {primaryNavItems.map((item) => (
+            <button
+              key={item.view}
+              className={`navItem ${activeView === item.view ? 'active' : ''}`}
+              onClick={() => setActiveView(item.view)}
+              title={item.label}
+            >
+              <span className="navShort">{item.shortLabel}</span>
+              <span className="navText">{item.label}</span>
+            </button>
+          ))}
+          {groupedNavItems.map((group) => (
+            <div className="navGroup" key={group.title}>
+              <div className="navGroupTitle" title={group.title}>{sidebarCollapsed ? group.shortTitle : group.title}</div>
+              {group.items.map((item) => (
+                <button
+                  key={item.view}
+                  className={`navItem subItem ${activeView === item.view ? 'active' : ''}`}
+                  onClick={() => setActiveView(item.view)}
+                  title={item.label}
+                >
+                  <span className="navShort">{item.shortLabel}</span>
+                  <span className="navText">{item.label}</span>
+                </button>
+              ))}
+            </div>
+          ))}
         </nav>
         <div className="runtime">
-          <span>版本 {appStatus?.version || '-'}</span>
-          <span>{appStatus?.userDataPath || ''}</span>
+          <span>{sidebarCollapsed ? `v${appStatus?.version || '-'}` : `版本 ${appStatus?.version || '-'}`}</span>
+          {!sidebarCollapsed && <span>{appStatus?.userDataPath || ''}</span>}
         </div>
       </aside>
 

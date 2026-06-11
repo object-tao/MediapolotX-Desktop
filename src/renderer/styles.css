@@ -37,6 +37,11 @@ button:disabled {
   min-height: 100vh;
   display: grid;
   grid-template-columns: 244px 1fr;
+  transition: grid-template-columns 0.18s ease;
+}
+
+.shell.sidebarCollapsed {
+  grid-template-columns: 76px 1fr;
 }
 
 .sidebar {
@@ -46,16 +51,33 @@ button:disabled {
   display: flex;
   flex-direction: column;
   gap: 28px;
+  transition: padding 0.18s ease;
 }
 
 .brand {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
 }
 
 .brand strong {
   font-size: 21px;
+}
+
+.brand > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.sidebarToggle {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  color: #eef3f8;
 }
 
 .brand span,
@@ -74,6 +96,11 @@ nav {
   background: transparent;
   color: #d6dee8;
   text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  overflow: hidden;
 }
 
 .navItem.active {
@@ -97,6 +124,67 @@ nav {
 .navItem.subItem {
   padding-left: 28px;
   font-size: 14px;
+}
+
+.navShort {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: none;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.navText {
+  white-space: nowrap;
+}
+
+.sidebarCollapsed .sidebar {
+  padding: 18px 12px;
+  gap: 22px;
+}
+
+.sidebarCollapsed .brand {
+  align-items: center;
+  flex-direction: column;
+}
+
+.sidebarCollapsed .brand strong {
+  font-size: 18px;
+}
+
+.sidebarCollapsed nav {
+  justify-items: center;
+}
+
+.sidebarCollapsed .navItem {
+  width: 52px;
+  justify-content: center;
+  padding: 8px;
+}
+
+.sidebarCollapsed .navItem.subItem {
+  padding-left: 8px;
+}
+
+.sidebarCollapsed .navShort {
+  display: grid;
+}
+
+.sidebarCollapsed .navText {
+  display: none;
+}
+
+.sidebarCollapsed .navGroupTitle {
+  text-align: center;
+  padding: 8px 0 2px;
+}
+
+.sidebarCollapsed .runtime {
+  text-align: center;
 }
 
 .runtime {
@@ -1001,6 +1089,10 @@ textarea {
 
 @media (max-width: 980px) {
   .shell {
+    grid-template-columns: 1fr;
+  }
+
+  .shell.sidebarCollapsed {
     grid-template-columns: 1fr;
   }
 
