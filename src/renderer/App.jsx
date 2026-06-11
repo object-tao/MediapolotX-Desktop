@@ -48,6 +48,7 @@ const primaryNavItems = [];
 
 const groupedNavItems = [
   {
+    key: 'contentAssets',
     title: '内容与素材',
     shortTitle: '材',
     items: [
@@ -58,6 +59,7 @@ const groupedNavItems = [
     ]
   },
   {
+    key: 'socialManagement',
     title: '自媒体管理',
     shortTitle: '媒',
     items: [
@@ -67,6 +69,7 @@ const groupedNavItems = [
     ]
   },
   {
+    key: 'toolkit',
     title: '工具集',
     shortTitle: '工',
     items: [
@@ -77,6 +80,7 @@ const groupedNavItems = [
     ]
   },
   {
+    key: 'baseConfig',
     title: '基础配置',
     shortTitle: '配',
     items: [
@@ -99,6 +103,9 @@ function App() {
   const [appStatus, setAppStatus] = useState(null);
   const [activeView, setActiveView] = useState('library');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
+  const [navGroupExpanded, setNavGroupExpanded] = useState(() => (
+    Object.fromEntries(groupedNavItems.map((group) => [group.key, true]))
+  ));
   const [storages, setStorages] = useState([]);
   const [selectedStorageId, setSelectedStorageId] = useState('');
   const [files, setFiles] = useState([]);
@@ -946,18 +953,26 @@ function App() {
         <nav>
           {groupedNavItems.map((group) => (
             <div className="navGroup" key={group.title}>
-              <div className="navGroupTitle" title={group.title}>{sidebarCollapsed ? group.shortTitle : group.title}</div>
-              {group.items.map((item) => (
-                <button
-                  key={item.view}
-                  className={`navItem subItem ${activeView === item.view ? 'active' : ''}`}
-                  onClick={() => setActiveView(item.view)}
-                  title={item.label}
-                >
-                  <span className="navIcon">{item.icon}</span>
-                  <span className="navText">{item.label}</span>
-                </button>
-              ))}
+              <button
+                type="button"
+                className="navGroupTitle"
+                title={group.title}
+                onClick={() => setNavGroupExpanded((current) => ({ ...current, [group.key]: !current[group.key] }))}
+              >
+                <span>{sidebarCollapsed ? group.shortTitle : group.title}</span>
+                <em>{navGroupExpanded[group.key] ? '▾' : '▸'}</em>
+              </button>
+              {navGroupExpanded[group.key] && group.items.map((item) => (
+                  <button
+                    key={item.view}
+                    className={`navItem subItem ${activeView === item.view ? 'active' : ''}`}
+                    onClick={() => setActiveView(item.view)}
+                    title={item.label}
+                  >
+                    <span className="navIcon">{item.icon}</span>
+                    <span className="navText">{item.label}</span>
+                  </button>
+                ))}
             </div>
           ))}
           {primaryNavItems.map((item) => (

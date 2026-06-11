@@ -115,10 +115,23 @@ nav {
 }
 
 .navGroupTitle {
+  width: 100%;
+  border: 0;
+  background: transparent;
   color: #8fa0b4;
   font-size: 12px;
   font-weight: 700;
   padding: 8px 12px 2px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  text-align: left;
+}
+
+.navGroupTitle em {
+  color: #8fa0b4;
+  font-style: normal;
+  font-size: 11px;
 }
 
 .navItem.subItem {
@@ -184,6 +197,12 @@ nav {
 .sidebarCollapsed .navGroupTitle {
   text-align: center;
   padding: 8px 0 2px;
+  justify-content: center;
+  gap: 2px;
+}
+
+.sidebarCollapsed .navGroupTitle em {
+  display: none;
 }
 
 .sidebarCollapsed .runtime {
