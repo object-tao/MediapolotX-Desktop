@@ -45,33 +45,33 @@ const mediaPlatformCards = [
 ];
 
 const primaryNavItems = [
-  { view: 'library', label: '素材库', shortLabel: '素', icon: 'L' },
-  { view: 'image', label: '图片处理', shortLabel: '图', icon: 'I' },
-  { view: 'video', label: '视频封面', shortLabel: '视', icon: 'V' },
-  { view: 'sync', label: '任务同步', shortLabel: '同', icon: 'S' },
-  { view: 'socialAccounts', label: '账号管理', shortLabel: '账', icon: 'A' },
-  { view: 'oneClickPublish', label: '一键发布', shortLabel: '发', icon: 'P' }
+  { view: 'removeAiMark', label: '去AI标识', shortLabel: 'AI', icon: 'AI' },
+  { view: 'imageDuplicate', label: '图片复制', shortLabel: '复', icon: 'C' },
+  { view: 'wechatMarkdown', label: '公众号转MD', shortLabel: 'MD', icon: 'M' },
+  { view: 'articleRewrite', label: '文章重写', shortLabel: '文', icon: 'W' },
+  { view: 'aiModelConfig', label: 'AI模型配置', shortLabel: '模', icon: 'G' },
+  { view: 'aiParamLibrary', label: 'AI参数库', shortLabel: '参', icon: 'P' }
 ];
 
 const groupedNavItems = [
   {
-    title: '工具集',
-    shortTitle: '工',
+    title: '内容与素材',
+    shortTitle: '材',
     items: [
-      { view: 'removeAiMark', label: '去AI标识', shortLabel: 'AI', icon: 'AI' },
-      { view: 'imageDuplicate', label: '图片复制', shortLabel: '复', icon: 'C' },
-      { view: 'wechatMarkdown', label: '公众号转MD', shortLabel: 'MD', icon: 'M' }
+      { view: 'library', label: '素材库', shortLabel: '素', icon: 'L' },
+      { view: 'image', label: '图片处理', shortLabel: '图', icon: 'I' },
+      { view: 'video', label: '视频封面', shortLabel: '视', icon: 'V' },
+      { view: 'sync', label: '任务同步', shortLabel: '同', icon: 'S' }
     ]
   },
   {
-    title: '内容创作',
-    shortTitle: '创',
-    items: [{ view: 'articleRewrite', label: '文章重写', shortLabel: '文', icon: 'W' }]
-  },
-  {
-    title: '基础配置',
-    shortTitle: '配',
-    items: [{ view: 'aiModelConfig', label: 'AI模型配置', shortLabel: '模', icon: 'G' }]
+    title: '自媒体管理',
+    shortTitle: '媒',
+    items: [
+      { view: 'socialAccounts', label: '账号管理', shortLabel: '账', icon: 'A' },
+      { view: 'socialWorks', label: '作品管理', shortLabel: '作', icon: 'O' },
+      { view: 'oneClickPublish', label: '一键发布', shortLabel: '发', icon: 'P' }
+    ]
   }
 ];
 
@@ -87,7 +87,7 @@ function App() {
   const socialBrowserRef = useRef(null);
   const [appStatus, setAppStatus] = useState(null);
   const [activeView, setActiveView] = useState('library');
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [storages, setStorages] = useState([]);
   const [selectedStorageId, setSelectedStorageId] = useState('');
   const [files, setFiles] = useState([]);
@@ -307,7 +307,7 @@ function App() {
   }, [loadAiStore, loadFiles, refreshSocialAccounts, refreshStorages, refreshTasks, selectedStorageId]);
 
   useEffect(() => {
-    if (activeView !== 'socialAccounts' && activeView !== 'oneClickPublish') {
+    if (!['socialAccounts', 'socialWorks', 'oneClickPublish'].includes(activeView)) {
       window.mediapolotx.social.hideBrowser();
     }
   }, [activeView]);
@@ -315,7 +315,7 @@ function App() {
   useEffect(() => {
     function syncBounds() {
       const bounds = getSocialBrowserBounds();
-      if (bounds && (activeView === 'socialAccounts' || activeView === 'oneClickPublish')) {
+      if (bounds && ['socialAccounts', 'socialWorks', 'oneClickPublish'].includes(activeView)) {
         window.mediapolotx.social.setBounds(bounds);
       }
     }
@@ -933,17 +933,6 @@ function App() {
           </button>
         </div>
         <nav>
-          {primaryNavItems.map((item) => (
-            <button
-              key={item.view}
-              className={`navItem ${activeView === item.view ? 'active' : ''}`}
-              onClick={() => setActiveView(item.view)}
-              title={item.label}
-            >
-              <span className="navIcon">{item.icon}</span>
-              <span className="navText">{item.label}</span>
-            </button>
-          ))}
           {groupedNavItems.map((group) => (
             <div className="navGroup" key={group.title}>
               <div className="navGroupTitle" title={group.title}>{sidebarCollapsed ? group.shortTitle : group.title}</div>
@@ -959,6 +948,17 @@ function App() {
                 </button>
               ))}
             </div>
+          ))}
+          {primaryNavItems.map((item) => (
+            <button
+              key={item.view}
+              className={`navItem ${activeView === item.view ? 'active' : ''}`}
+              onClick={() => setActiveView(item.view)}
+              title={item.label}
+            >
+              <span className="navIcon">{item.icon}</span>
+              <span className="navText">{item.label}</span>
+            </button>
           ))}
         </nav>
         <div className="runtime">
@@ -1189,6 +1189,45 @@ function App() {
                   <button type="button" className="dangerButton" onClick={clearSocialCookies} disabled={!selectedSocialAccount}>清理登录态</button>
                 </div>
                 <textarea value={cookieText} onChange={(event) => setCookieText(event.target.value)} placeholder="Cookie JSON，导出后可保存，导入时粘贴到这里" />
+              </div>
+            </div>
+          </section>
+        )}
+
+        {activeView === 'socialWorks' && (
+          <section className="contentGrid wideRight">
+            <div className="panel">
+              <h2>作品管理</h2>
+              <div className="toolIntro">
+                <p>选择账号后打开平台作品管理页。当前版本先承载真实后台页面，后续可继续接入作品列表抓取和数据同步。</p>
+              </div>
+              <div className="form">
+                <label>
+                  管理账号
+                  <select value={selectedSocialAccountId} onChange={(event) => setSelectedSocialAccountId(event.target.value)}>
+                    <option value="">请选择账号</option>
+                    {socialAccounts.map((account) => (
+                      <option key={account.id} value={account.id}>{account.nickname} / {platformLabel(socialPlatforms, account.platform)}</option>
+                    ))}
+                  </select>
+                </label>
+                <button type="button" onClick={() => openSocialAccount(selectedSocialAccount, 'worksUrl')} disabled={!selectedSocialAccount}>打开作品管理</button>
+              </div>
+            </div>
+            <div className="panel socialBrowserPanel">
+              <SocialBrowserToolbar
+                account={selectedSocialAccount}
+                state={socialBrowserState}
+                onHome={() => openSocialAccount(selectedSocialAccount, 'homeUrl')}
+                onPublish={() => openSocialAccount(selectedSocialAccount, 'publishUrl')}
+                onWorks={() => openSocialAccount(selectedSocialAccount, 'worksUrl')}
+                onData={() => openSocialAccount(selectedSocialAccount, 'dataUrl')}
+                onBack={() => socialBrowserCommand('back')}
+                onForward={() => socialBrowserCommand('forward')}
+                onReload={() => socialBrowserCommand('reload')}
+              />
+              <div className="socialBrowserHost" ref={socialBrowserRef}>
+                {!selectedSocialAccount && <div className="empty">请选择账号后打开作品管理</div>}
               </div>
             </div>
           </section>
@@ -1705,7 +1744,19 @@ function App() {
           </section>
         )}
 
-        {!['socialAccounts', 'oneClickPublish'].includes(activeView) && (
+        {activeView === 'aiParamLibrary' && (
+          <section className="contentGrid">
+            <div className="panel">
+              <h2>AI参数库</h2>
+              <div className="toolIntro">
+                <p>用于沉淀文章重写、图片处理、去 AI 标识等常用参数模板。当前版本先提供入口，后续接入模板保存、复用和导入导出。</p>
+              </div>
+              <div className="empty">暂无参数模板</div>
+            </div>
+          </section>
+        )}
+
+        {!['socialAccounts', 'socialWorks', 'oneClickPublish', 'aiParamLibrary'].includes(activeView) && (
           <FileTable
             files={files}
             selectedFileIds={selectedFileIds}
@@ -1716,7 +1767,7 @@ function App() {
           />
         )}
 
-        {!['sync', 'socialAccounts', 'oneClickPublish'].includes(activeView) && <TaskList tasks={tasks} compact onOpenPath={openPath} />}
+        {!['sync', 'socialAccounts', 'socialWorks', 'oneClickPublish', 'aiParamLibrary'].includes(activeView) && <TaskList tasks={tasks} compact onOpenPath={openPath} />}
         {addAccountModal.open && (
           <AddMediaAccountModal
             modal={addAccountModal}
@@ -2087,12 +2138,14 @@ function viewTitle(activeView) {
   if (activeView === 'video') return '视频封面处理';
   if (activeView === 'sync') return 'Web 协同';
   if (activeView === 'socialAccounts') return '账号管理';
+  if (activeView === 'socialWorks') return '作品管理';
   if (activeView === 'oneClickPublish') return '一键发布';
   if (activeView === 'removeAiMark') return '去AI标识';
   if (activeView === 'imageDuplicate') return '图片复制';
   if (activeView === 'wechatMarkdown') return '公众号转MD';
   if (activeView === 'articleRewrite') return '文章重写';
   if (activeView === 'aiModelConfig') return 'AI模型配置';
+  if (activeView === 'aiParamLibrary') return 'AI参数库';
   return '本地素材库';
 }
 
@@ -2101,12 +2154,14 @@ function viewSubtitle(activeView) {
   if (activeView === 'video') return '从选中的视频中截取封面，并生成横竖屏适配结果。';
   if (activeView === 'sync') return '连接 MediapolotX Web，获取任务队列并回传处理状态。';
   if (activeView === 'socialAccounts') return '管理公众号和小红书账号，使用独立 Cookie/session 打开真实平台后台。';
+  if (activeView === 'socialWorks') return '打开公众号和小红书作品管理页，后续接入作品数据抓取。';
   if (activeView === 'oneClickPublish') return '打开平台发布页并自动填充标题、正文和标签，最终发布由人工确认。';
   if (activeView === 'removeAiMark') return '工具集能力：面向图片中的 AI 标识、水印和平台痕迹处理。';
   if (activeView === 'imageDuplicate') return '按参数组合批量生成多套轻微不同的图片副本。';
   if (activeView === 'wechatMarkdown') return '下载微信公众号文章并保存为 Markdown 文件。';
   if (activeView === 'articleRewrite') return '导入资讯、公告或同行文章，调用 AI 深度重写并保存 Markdown。';
   if (activeView === 'aiModelConfig') return '集中管理后续 AI 功能共用的模型、密钥和连接参数。';
+  if (activeView === 'aiParamLibrary') return '管理 AI 功能常用参数模板，便于后续批量复用。';
   return '管理本机目录、移动硬盘和 NAS，建立本地 SQLite 索引。';
 }
 
