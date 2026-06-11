@@ -18,6 +18,7 @@ import {
   UserRoundCog,
   Wrench
 } from 'lucide-react';
+import { promptLibraryItems } from './data/promptLibrary';
 
 const storageTypes = [
   { value: 'local', label: '本机目录' },
@@ -115,6 +116,22 @@ function providerLabel(providers, value) {
 
 function cleanRemoteError(error) {
   return String(error?.message || error || '').replace(/^Error invoking remote method '[^']+':\s*/, '');
+}
+
+async function copyTextToClipboard(text) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.left = '-9999px';
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand('copy');
+  document.body.removeChild(textarea);
 }
 
 const navIconByView = {
@@ -269,6 +286,9 @@ function App() {
   const [aiStore, setAiStore] = useState({ models: [], defaultTextModelId: '', defaultVisionModelId: '' });
   const [editingAiModel, setEditingAiModel] = useState(null);
   const [aiTestResult, setAiTestResult] = useState(null);
+  const [promptFilters, setPromptFilters] = useState({ category: 'all', tag: 'all' });
+  const [promptPage, setPromptPage] = useState(1);
+  const [selectedPrompt, setSelectedPrompt] = useState(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -288,6 +308,26 @@ function App() {
     () => socialAccounts.find((account) => account.id === selectedSocialAccountId) || null,
     [socialAccounts, selectedSocialAccountId]
   );
+  const promptCategories = useMemo(
+    () => Array.from(new Set(promptLibraryItems.map((item) => item.category))),
+    []
+  );
+  const promptTags = useMemo(
+    () => Array.from(new Set(promptLibraryItems.flatMap((item) => item.tags))),
+    []
+  );
+  const filteredPrompts = useMemo(() => promptLibraryItems.filter((item) => {
+    const categoryMatched = promptFilters.category === 'all' || item.category === promptFilters.category;
+    const tagMatched = promptFilters.tag === 'all' || item.tags.includes(promptFilters.tag);
+    return categoryMatched && tagMatched;
+  }), [promptFilters]);
+  const promptPageSize = 6;
+  const promptPageCount = Math.max(1, Math.ceil(filteredPrompts.length / promptPageSize));
+  const pagedPrompts = useMemo(() => {
+    const normalizedPage = Math.min(promptPage, promptPageCount);
+    const start = (normalizedPage - 1) * promptPageSize;
+    return filteredPrompts.slice(start, start + promptPageSize);
+  }, [filteredPrompts, promptPage, promptPageCount]);
 
   const loadFiles = useCallback(async (storageId = selectedStorageId) => {
     if (!storageId) return;
@@ -380,6 +420,10 @@ function App() {
       window.mediapolotx.social.hideBrowser();
     }
   }, [activeView]);
+
+  useEffect(() => {
+    setPromptPage((current) => Math.min(current, promptPageCount));
+  }, [promptPageCount]);
 
   useEffect(() => {
     function syncBounds() {
@@ -1825,15 +1869,21 @@ function App() {
         )}
 
         {activeView === 'aiParamLibrary' && (
-          <section className="contentGrid">
-            <div className="panel">
-              <h2>AI提示词库</h2>
-              <div className="toolIntro">
-                <p>用于沉淀文章重写、图片处理、去 AI 标识等常用提示词模板。当前版本先提供入口，后续接入模板保存、复用和导入导出。</p>
-              </div>
-              <div className="empty">暂无提示词模板</div>
-            </div>
-          </section>
+          <PromptLibraryView
+            categories={promptCategories}
+            tags={promptTags}
+            filters={promptFilters}
+            onFilterChange={(nextFilters) => {
+              setPromptFilters(nextFilters);
+              setPromptPage(1);
+            }}
+            prompts={pagedPrompts}
+            totalCount={filteredPrompts.length}
+            page={Math.min(promptPage, promptPageCount)}
+            pageCount={promptPageCount}
+            onPageChange={setPromptPage}
+            onOpenPrompt={setSelectedPrompt}
+          />
         )}
 
         {!['socialAccounts', 'socialWorks', 'oneClickPublish', 'aiParamLibrary'].includes(activeView) && (
@@ -1859,8 +1909,146 @@ function App() {
             onCookieAdd={addSocialAccountByCookie}
           />
         )}
+        {selectedPrompt && (
+          <PromptDetailModal
+            prompt={selectedPrompt}
+            onClose={() => setSelectedPrompt(null)}
+            onCopy={async () => {
+              await copyTextToClipboard(selectedPrompt.prompt);
+              setMessage('提示词已复制');
+            }}
+          />
+        )}
         {message && <div className="toast">{message}</div>}
       </main>
+    </div>
+  );
+}
+
+function PromptLibraryView({
+  categories,
+  tags,
+  filters,
+  onFilterChange,
+  prompts,
+  totalCount,
+  page,
+  pageCount,
+  onPageChange,
+  onOpenPrompt
+}) {
+  function updateFilter(key, value) {
+    onFilterChange({ ...filters, [key]: value });
+  }
+
+  return (
+    <section className="promptLibraryPage">
+      <div className="panel promptFilterPanel">
+        <div>
+          <h2>AI提示词库</h2>
+          <p>按分类和标签筛选常用提示词，点击卡片查看完整内容并复制复用。</p>
+        </div>
+        <div className="promptFilters">
+          <label>
+            分类
+            <select value={filters.category} onChange={(event) => updateFilter('category', event.target.value)}>
+              <option value="all">全部分类</option>
+              {categories.map((category) => (
+                <option key={category} value={category}>{category}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            标签
+            <select value={filters.tag} onChange={(event) => updateFilter('tag', event.target.value)}>
+              <option value="all">全部标签</option>
+              {tags.map((tag) => (
+                <option key={tag} value={tag}>{tag}</option>
+              ))}
+            </select>
+          </label>
+          <button className="secondaryButton" onClick={() => onFilterChange({ category: 'all', tag: 'all' })}>
+            清空筛选
+          </button>
+        </div>
+      </div>
+
+      <div className="panel promptLibraryPanel">
+        <div className="panelHeader">
+          <h2>提示词瀑布流</h2>
+          <span>共 {totalCount} 条，当前第 {page} / {pageCount} 页</span>
+        </div>
+        {prompts.length > 0 ? (
+          <div className="promptMasonry">
+            {prompts.map((item) => (
+              <button className="promptCard" key={item.serialNo} onClick={() => onOpenPrompt(item)}>
+                <img src={item.imagePath} alt={`${item.category} 提示词封面`} />
+                <div className="promptCardBody">
+                  <div className="promptMeta">
+                    <span>#{String(item.serialNo).padStart(3, '0')}</span>
+                    <em>{item.category}</em>
+                  </div>
+                  <p>{item.prompt}</p>
+                  <div className="promptTagList">
+                    {item.tags.map((tag) => (
+                      <small key={tag}>{tag}</small>
+                    ))}
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="empty">没有匹配的提示词</div>
+        )}
+        <div className="promptPagination">
+          <button className="secondaryButton" disabled={page <= 1} onClick={() => onPageChange(page - 1)}>
+            上一页
+          </button>
+          {Array.from({ length: pageCount }, (_, index) => index + 1).map((pageNumber) => (
+            <button
+              className={`pageButton ${pageNumber === page ? 'active' : ''}`}
+              key={pageNumber}
+              onClick={() => onPageChange(pageNumber)}
+            >
+              {pageNumber}
+            </button>
+          ))}
+          <button className="secondaryButton" disabled={page >= pageCount} onClick={() => onPageChange(page + 1)}>
+            下一页
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function PromptDetailModal({ prompt, onClose, onCopy }) {
+  return (
+    <div className="modalBackdrop">
+      <div className="modal promptDetailModal">
+        <div className="modalHeader">
+          <div>
+            <h2>提示词详情</h2>
+            <p>#{String(prompt.serialNo).padStart(3, '0')} · {prompt.category}</p>
+          </div>
+          <button className="iconButton" onClick={onClose}>×</button>
+        </div>
+        <img className="promptDetailImage" src={prompt.imagePath} alt={`${prompt.category} 提示词封面`} />
+        <div className="promptTagList">
+          {prompt.tags.map((tag) => (
+            <small key={tag}>{tag}</small>
+          ))}
+        </div>
+        <textarea className="largeTextarea" value={prompt.prompt} readOnly />
+        <div className="modalActions">
+          <button className="secondaryButton" onClick={onClose}>关闭</button>
+          <button onClick={onCopy}>
+            <Copy size={16} />
+            复制提示词
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
