@@ -104,7 +104,7 @@ const groupedNavItems = [
     shortTitle: '配',
     items: [
       { view: 'aiModelConfig', label: 'AI模型配置', shortLabel: '模', icon: 'G' },
-      { view: 'aiParamLibrary', label: 'AI参数库', shortLabel: '参', icon: 'P' }
+      { view: 'aiParamLibrary', label: 'AI提示词库', shortLabel: '词', icon: 'P' }
     ]
   }
 ];
@@ -1827,11 +1827,11 @@ function App() {
         {activeView === 'aiParamLibrary' && (
           <section className="contentGrid">
             <div className="panel">
-              <h2>AI参数库</h2>
+              <h2>AI提示词库</h2>
               <div className="toolIntro">
-                <p>用于沉淀文章重写、图片处理、去 AI 标识等常用参数模板。当前版本先提供入口，后续接入模板保存、复用和导入导出。</p>
+                <p>用于沉淀文章重写、图片处理、去 AI 标识等常用提示词模板。当前版本先提供入口，后续接入模板保存、复用和导入导出。</p>
               </div>
-              <div className="empty">暂无参数模板</div>
+              <div className="empty">暂无提示词模板</div>
             </div>
           </section>
         )}
@@ -2225,7 +2225,7 @@ function viewTitle(activeView) {
   if (activeView === 'wechatMarkdown') return '公众号转MD';
   if (activeView === 'articleRewrite') return '文章重写';
   if (activeView === 'aiModelConfig') return 'AI模型配置';
-  if (activeView === 'aiParamLibrary') return 'AI参数库';
+  if (activeView === 'aiParamLibrary') return 'AI提示词库';
   return '本地素材库';
 }
 
@@ -2241,7 +2241,7 @@ function viewSubtitle(activeView) {
   if (activeView === 'wechatMarkdown') return '下载微信公众号文章并保存为 Markdown 文件。';
   if (activeView === 'articleRewrite') return '导入资讯、公告或同行文章，调用 AI 深度重写并保存 Markdown。';
   if (activeView === 'aiModelConfig') return '集中管理后续 AI 功能共用的模型、密钥和连接参数。';
-  if (activeView === 'aiParamLibrary') return '管理 AI 功能常用参数模板，便于后续批量复用。';
+  if (activeView === 'aiParamLibrary') return '管理 AI 功能常用提示词模板，便于后续批量复用。';
   return '管理本机目录、移动硬盘和 NAS，建立本地 SQLite 索引。';
 }
 
