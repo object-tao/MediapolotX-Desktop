@@ -19,7 +19,6 @@ import {
   Wrench
 } from 'lucide-react';
 import { promptLibraryItems } from './data/promptLibrary';
-import { localWorks } from './data/localWorks';
 
 const storageTypes = [
   { value: 'local', label: '本机目录' },
@@ -293,6 +292,8 @@ function App() {
   const [promptPage, setPromptPage] = useState(1);
   const [selectedPrompt, setSelectedPrompt] = useState(null);
   const [localWorksPath, setLocalWorksPath] = useState(() => localStorage.getItem('mediapolotx.localWorksPath') || '');
+  const [localWorksList, setLocalWorksList] = useState([]);
+  const [localWorksImportPath, setLocalWorksImportPath] = useState('');
   const [workPathModalOpen, setWorkPathModalOpen] = useState(false);
   const [workPathDraft, setWorkPathDraft] = useState('');
   const [selectedLocalWork, setSelectedLocalWork] = useState(null);
@@ -1025,6 +1026,25 @@ function App() {
     setMessage(nextPath ? '作品路径已保存' : '作品路径已清空');
   }
 
+  async function importLocalWorksDirectory() {
+    const folderPath = await window.mediapolotx.selectDirectory();
+    if (!folderPath) return;
+    try {
+      setBusy(true);
+      setMessage('正在扫描导入目录...');
+      const result = await window.mediapolotx.localWorks.scanImportDirectory(folderPath);
+      setLocalWorksImportPath(result.rootPath);
+      setLocalWorksList(result.works);
+      setSelectedLocalWork(null);
+      setSelectedChildWork(null);
+      setMessage(`扫描完成：${result.works.length} 个主作品`);
+    } catch (error) {
+      setMessage(`扫描失败：${error.message}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function runTask(taskRunner) {
     setBusy(true);
     setMessage('任务执行中...');
@@ -1385,9 +1405,12 @@ function App() {
 
         {activeView === 'localWorks' && (
           <LocalWorksView
-            works={localWorks}
+            works={localWorksList}
             worksPath={localWorksPath}
+            importPath={localWorksImportPath}
+            busy={busy}
             onSetPath={openWorkPathModal}
+            onImportDirectory={importLocalWorksDirectory}
             onOpenPath={openPath}
             onOpenChildren={(work) => {
               setSelectedLocalWork(work);
@@ -2083,8 +2106,10 @@ function PromptLibraryView({
   );
 }
 
-function LocalWorksView({ works, worksPath, onSetPath, onOpenPath, onOpenChildren }) {
+function LocalWorksView({ works, worksPath, importPath, busy, onSetPath, onImportDirectory, onOpenPath, onOpenChildren }) {
   function workMdPath(work) {
+    if (!work.mdFile) return '未找到 MD 文件';
+    if (/^[a-zA-Z]:[\\/]/.test(work.mdFile) || work.mdFile.startsWith('\\\\')) return work.mdFile;
     if (!worksPath) return work.mdFile;
     return `${worksPath}\\${work.folderName}\\${work.mdFile}`;
   }
@@ -2094,41 +2119,48 @@ function LocalWorksView({ works, worksPath, onSetPath, onOpenPath, onOpenChildre
       <div className="panelHeader localWorksHeader">
         <div>
           <h2>本地作品列表</h2>
-          <span>{worksPath || '尚未设置作品存放路径'}</span>
+          <span>作品存放路径：{worksPath || '尚未设置'}{importPath ? `；当前导入来源：${importPath}` : ''}</span>
         </div>
-        <button type="button" onClick={onSetPath}>设置作品路径</button>
+        <div className="tableActions">
+          <button type="button" onClick={onSetPath}>设置作品路径</button>
+          <button type="button" onClick={onImportDirectory} disabled={busy}>选择目录导入</button>
+        </div>
       </div>
-      <div className="localWorkTable">
-        <div className="localWorkRow head">
-          <span>序号</span>
-          <span>标题</span>
-          <span>MD文件</span>
-          <span>子作品数量</span>
-          <span>发布状态</span>
-          <span>操作</span>
-        </div>
-        {works.map((work) => (
-          <div className="localWorkRow" key={work.id}>
-            <span>{work.serialNo}</span>
-            <span title={work.title}>{work.title}</span>
-            <span title={workMdPath(work)}>{workMdPath(work)}</span>
-            <span>
-              {work.children.length > 0 ? (
-                <button type="button" className="linkButton" onClick={() => onOpenChildren(work)}>
-                  {work.children.length} 个
-                </button>
-              ) : (
-                '0 个'
-              )}
-            </span>
-            <span><em className={`publishStatus ${statusClassName(work.publishStatus)}`}>{work.publishStatus}</em></span>
-            <span className="rowActions">
-              <button type="button" onClick={() => onOpenPath(workMdPath(work))} disabled={!worksPath}>打开MD</button>
-              {worksPath && <button type="button" onClick={() => onOpenPath(`${worksPath}\\${work.folderName}`)}>打开目录</button>}
-            </span>
+      {works.length > 0 ? (
+        <div className="localWorkTable">
+          <div className="localWorkRow head">
+            <span>序号</span>
+            <span>标题</span>
+            <span>MD文件</span>
+            <span>子作品数量</span>
+            <span>发布状态</span>
+            <span>操作</span>
           </div>
-        ))}
-      </div>
+          {works.map((work) => (
+            <div className="localWorkRow" key={work.id}>
+              <span>{work.serialNo}</span>
+              <span title={work.title}>{work.title}</span>
+              <span title={workMdPath(work)}>{workMdPath(work)}</span>
+              <span>
+                {work.children.length > 0 ? (
+                  <button type="button" className="linkButton" onClick={() => onOpenChildren(work)}>
+                    {work.children.length} 个
+                  </button>
+                ) : (
+                  '0 个'
+                )}
+              </span>
+              <span><em className={`publishStatus ${statusClassName(work.publishStatus)}`}>{work.publishStatus}</em></span>
+              <span className="rowActions">
+                <button type="button" onClick={() => onOpenPath(workMdPath(work))} disabled={!work.mdFile}>打开MD</button>
+                <button type="button" onClick={() => onOpenPath(work.folderPath || `${worksPath}\\${work.folderName}`)}>打开目录</button>
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="empty">尚未导入本地作品。点击“选择目录导入”，选择包含作品文件夹的来源目录。</div>
+      )}
     </section>
   );
 }
@@ -2176,9 +2208,13 @@ function LocalWorkChildrenModal({ work, selectedChild, onSelectChild, onBack, on
         {selectedChild ? (
           <div className="xhsPreview">
             <div className="xhsImageStrip">
-              {selectedChild.imagePaths.map((imagePath, index) => (
-                <img key={`${imagePath}-${index}`} src={imagePath} alt={`${selectedChild.title} ${index + 1}`} />
-              ))}
+              {selectedChild.imagePaths.length > 0 ? (
+                selectedChild.imagePaths.map((imagePath, index) => (
+                  <img key={`${imagePath}-${index}`} src={imagePath} alt={`${selectedChild.title} ${index + 1}`} />
+                ))
+              ) : (
+                <div className="imagePlaceholder">暂无图片</div>
+              )}
             </div>
             <article className="xhsPostBody">
               <div className="promptTagList">
@@ -2186,7 +2222,7 @@ function LocalWorkChildrenModal({ work, selectedChild, onSelectChild, onBack, on
                 <small className={statusClassName(selectedChild.publishStatus)}>{selectedChild.publishStatus}</small>
               </div>
               <h3>{selectedChild.title}</h3>
-              <p>{selectedChild.content}</p>
+              <p>{selectedChild.content || '暂无正文内容'}</p>
               <div className="promptTagList">
                 {selectedChild.tags.map((tag) => (
                   <small key={tag}>#{tag}</small>
@@ -2198,10 +2234,14 @@ function LocalWorkChildrenModal({ work, selectedChild, onSelectChild, onBack, on
           <div className="localChildMasonry">
             {work.children.map((child) => (
               <button className="localChildCard" key={child.id} onClick={() => onSelectChild(child)}>
-                <img src={child.imagePaths[0]} alt={child.title} />
+                {child.imagePaths[0] ? (
+                  <img src={child.imagePaths[0]} alt={child.title} />
+                ) : (
+                  <div className="imagePlaceholder">暂无图片</div>
+                )}
                 <div>
                   <strong>{child.title}</strong>
-                  <p>{child.content}</p>
+                  <p>{child.content || `子作品目录：${child.variantName}`}</p>
                   <span>
                     <small>{child.platform}</small>
                     <em className={`publishStatus ${statusClassName(child.publishStatus)}`}>{child.publishStatus}</em>

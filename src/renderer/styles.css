@@ -913,6 +913,14 @@ textarea {
   background: #eef3f8;
 }
 
+.imagePlaceholder {
+  min-height: 220px;
+  display: grid;
+  place-items: center;
+  color: #748195;
+  background: #eef3f8;
+}
+
 .localChildCard div {
   display: grid;
   gap: 9px;

@@ -11,6 +11,7 @@ const aiMarkRemover = require('../modules/aiMarkRemover');
 const imageDuplicator = require('../modules/imageDuplicator');
 const wechatMpMarkdown = require('../modules/wechatMpMarkdown');
 const articleRewriter = require('../modules/articleRewriter');
+const localWorkImporter = require('../modules/localWorkImporter');
 const { createAiConfigManager } = require('../modules/aiConfigManager');
 const { createSocialAccountManager } = require('../modules/socialAccountManager');
 const { createLogger } = require('../utils/logger');
@@ -104,6 +105,10 @@ function registerIpc() {
     const errorMessage = await shell.openPath(targetPath);
     return { opened: !errorMessage, errorMessage };
   });
+
+  ipcMain.handle('localWorks:scanImportDirectory', async (_event, rootPath) => (
+    localWorkImporter.scanLocalWorks(rootPath)
+  ));
 
   ipcMain.handle('storage:add', (_event, payload) => {
     const storage = storageManager.addStorage(payload.name, payload.type, payload.basePath);
