@@ -44,14 +44,7 @@ const mediaPlatformCards = [
   { value: 'custom', label: '自定义平台', icon: '+', enabled: false }
 ];
 
-const primaryNavItems = [
-  { view: 'removeAiMark', label: '去AI标识', shortLabel: 'AI', icon: 'AI' },
-  { view: 'imageDuplicate', label: '图片复制', shortLabel: '复', icon: 'C' },
-  { view: 'wechatMarkdown', label: '公众号转MD', shortLabel: 'MD', icon: 'M' },
-  { view: 'articleRewrite', label: '文章重写', shortLabel: '文', icon: 'W' },
-  { view: 'aiModelConfig', label: 'AI模型配置', shortLabel: '模', icon: 'G' },
-  { view: 'aiParamLibrary', label: 'AI参数库', shortLabel: '参', icon: 'P' }
-];
+const primaryNavItems = [];
 
 const groupedNavItems = [
   {
@@ -71,6 +64,24 @@ const groupedNavItems = [
       { view: 'socialAccounts', label: '账号管理', shortLabel: '账', icon: 'A' },
       { view: 'socialWorks', label: '作品管理', shortLabel: '作', icon: 'O' },
       { view: 'oneClickPublish', label: '一键发布', shortLabel: '发', icon: 'P' }
+    ]
+  },
+  {
+    title: '工具集',
+    shortTitle: '工',
+    items: [
+      { view: 'removeAiMark', label: '去AI标识', shortLabel: 'AI', icon: 'AI' },
+      { view: 'imageDuplicate', label: '图片复制', shortLabel: '复', icon: 'C' },
+      { view: 'wechatMarkdown', label: '公众号转MD', shortLabel: 'MD', icon: 'M' },
+      { view: 'articleRewrite', label: '文章重写', shortLabel: '文', icon: 'W' }
+    ]
+  },
+  {
+    title: '基础配置',
+    shortTitle: '配',
+    items: [
+      { view: 'aiModelConfig', label: 'AI模型配置', shortLabel: '模', icon: 'G' },
+      { view: 'aiParamLibrary', label: 'AI参数库', shortLabel: '参', icon: 'P' }
     ]
   }
 ];
