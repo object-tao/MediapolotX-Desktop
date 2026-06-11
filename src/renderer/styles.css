@@ -126,16 +126,18 @@ nav {
   font-size: 14px;
 }
 
-.navShort {
+.navIcon {
   width: 28px;
   min-width: 28px;
   height: 28px;
   border-radius: 6px;
-  display: none;
+  display: grid;
   place-items: center;
   background: rgba(255, 255, 255, 0.08);
-  font-size: 12px;
+  color: #dbe6f2;
+  font-size: 11px;
   font-weight: 700;
+  letter-spacing: 0;
 }
 
 .navText {
@@ -170,12 +172,13 @@ nav {
   padding-left: 8px;
 }
 
-.sidebarCollapsed .navShort {
-  display: grid;
-}
-
 .sidebarCollapsed .navText {
   display: none;
+}
+
+.navItem.active .navIcon {
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
 }
 
 .sidebarCollapsed .navGroupTitle {

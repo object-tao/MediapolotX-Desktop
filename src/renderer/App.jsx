@@ -45,12 +45,12 @@ const mediaPlatformCards = [
 ];
 
 const primaryNavItems = [
-  { view: 'library', label: '素材库', shortLabel: '素' },
-  { view: 'image', label: '图片处理', shortLabel: '图' },
-  { view: 'video', label: '视频封面', shortLabel: '视' },
-  { view: 'sync', label: '任务同步', shortLabel: '同' },
-  { view: 'socialAccounts', label: '账号管理', shortLabel: '账' },
-  { view: 'oneClickPublish', label: '一键发布', shortLabel: '发' }
+  { view: 'library', label: '素材库', shortLabel: '素', icon: 'L' },
+  { view: 'image', label: '图片处理', shortLabel: '图', icon: 'I' },
+  { view: 'video', label: '视频封面', shortLabel: '视', icon: 'V' },
+  { view: 'sync', label: '任务同步', shortLabel: '同', icon: 'S' },
+  { view: 'socialAccounts', label: '账号管理', shortLabel: '账', icon: 'A' },
+  { view: 'oneClickPublish', label: '一键发布', shortLabel: '发', icon: 'P' }
 ];
 
 const groupedNavItems = [
@@ -58,20 +58,20 @@ const groupedNavItems = [
     title: '工具集',
     shortTitle: '工',
     items: [
-      { view: 'removeAiMark', label: '去AI标识', shortLabel: 'AI' },
-      { view: 'imageDuplicate', label: '图片复制', shortLabel: '复' },
-      { view: 'wechatMarkdown', label: '公众号转MD', shortLabel: 'MD' }
+      { view: 'removeAiMark', label: '去AI标识', shortLabel: 'AI', icon: 'AI' },
+      { view: 'imageDuplicate', label: '图片复制', shortLabel: '复', icon: 'C' },
+      { view: 'wechatMarkdown', label: '公众号转MD', shortLabel: 'MD', icon: 'M' }
     ]
   },
   {
     title: '内容创作',
     shortTitle: '创',
-    items: [{ view: 'articleRewrite', label: '文章重写', shortLabel: '文' }]
+    items: [{ view: 'articleRewrite', label: '文章重写', shortLabel: '文', icon: 'W' }]
   },
   {
     title: '基础配置',
     shortTitle: '配',
-    items: [{ view: 'aiModelConfig', label: 'AI模型配置', shortLabel: '模' }]
+    items: [{ view: 'aiModelConfig', label: 'AI模型配置', shortLabel: '模', icon: 'G' }]
   }
 ];
 
@@ -940,7 +940,7 @@ function App() {
               onClick={() => setActiveView(item.view)}
               title={item.label}
             >
-              <span className="navShort">{item.shortLabel}</span>
+              <span className="navIcon">{item.icon}</span>
               <span className="navText">{item.label}</span>
             </button>
           ))}
@@ -954,7 +954,7 @@ function App() {
                   onClick={() => setActiveView(item.view)}
                   title={item.label}
                 >
-                  <span className="navShort">{item.shortLabel}</span>
+                  <span className="navIcon">{item.icon}</span>
                   <span className="navText">{item.label}</span>
                 </button>
               ))}
