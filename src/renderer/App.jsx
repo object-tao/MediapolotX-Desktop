@@ -19,6 +19,7 @@ import {
   Wrench
 } from 'lucide-react';
 import { promptLibraryItems } from './data/promptLibrary';
+import { localWorks } from './data/localWorks';
 
 const storageTypes = [
   { value: 'local', label: '本机目录' },
@@ -85,6 +86,7 @@ const groupedNavItems = [
     items: [
       { view: 'socialAccounts', label: '账号管理', shortLabel: '账', icon: 'A' },
       { view: 'socialWorks', label: '作品管理', shortLabel: '作', icon: 'O' },
+      { view: 'localWorks', label: '本地作品管理', shortLabel: '本', icon: 'B' },
       { view: 'oneClickPublish', label: '一键发布', shortLabel: '发', icon: 'P' }
     ]
   },
@@ -141,6 +143,7 @@ const navIconByView = {
   sync: RefreshCw,
   socialAccounts: UserRoundCog,
   socialWorks: GalleryVerticalEnd,
+  localWorks: FolderOpen,
   oneClickPublish: Send,
   removeAiMark: Sparkles,
   imageDuplicate: Copy,
@@ -289,6 +292,11 @@ function App() {
   const [promptFilters, setPromptFilters] = useState({ category: 'all', tag: 'all' });
   const [promptPage, setPromptPage] = useState(1);
   const [selectedPrompt, setSelectedPrompt] = useState(null);
+  const [localWorksPath, setLocalWorksPath] = useState(() => localStorage.getItem('mediapolotx.localWorksPath') || '');
+  const [workPathModalOpen, setWorkPathModalOpen] = useState(false);
+  const [workPathDraft, setWorkPathDraft] = useState('');
+  const [selectedLocalWork, setSelectedLocalWork] = useState(null);
+  const [selectedChildWork, setSelectedChildWork] = useState(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -999,6 +1007,24 @@ function App() {
     if (!result.opened) setMessage(result.errorMessage || '无法打开路径');
   }
 
+  function openWorkPathModal() {
+    setWorkPathDraft(localWorksPath);
+    setWorkPathModalOpen(true);
+  }
+
+  async function chooseLocalWorksPath() {
+    const folderPath = await window.mediapolotx.selectDirectory();
+    if (folderPath) setWorkPathDraft(folderPath);
+  }
+
+  function saveLocalWorksPath() {
+    const nextPath = workPathDraft.trim();
+    setLocalWorksPath(nextPath);
+    localStorage.setItem('mediapolotx.localWorksPath', nextPath);
+    setWorkPathModalOpen(false);
+    setMessage(nextPath ? '作品路径已保存' : '作品路径已清空');
+  }
+
   async function runTask(taskRunner) {
     setBusy(true);
     setMessage('任务执行中...');
@@ -1355,6 +1381,19 @@ function App() {
               </div>
             </div>
           </section>
+        )}
+
+        {activeView === 'localWorks' && (
+          <LocalWorksView
+            works={localWorks}
+            worksPath={localWorksPath}
+            onSetPath={openWorkPathModal}
+            onOpenPath={openPath}
+            onOpenChildren={(work) => {
+              setSelectedLocalWork(work);
+              setSelectedChildWork(null);
+            }}
+          />
         )}
 
         {activeView === 'oneClickPublish' && (
@@ -1886,7 +1925,7 @@ function App() {
           />
         )}
 
-        {!['socialAccounts', 'socialWorks', 'oneClickPublish', 'aiParamLibrary'].includes(activeView) && (
+        {!['socialAccounts', 'socialWorks', 'localWorks', 'oneClickPublish', 'aiParamLibrary'].includes(activeView) && (
           <FileTable
             files={files}
             selectedFileIds={selectedFileIds}
@@ -1897,7 +1936,7 @@ function App() {
           />
         )}
 
-        {!['sync', 'socialAccounts', 'socialWorks', 'oneClickPublish', 'aiParamLibrary'].includes(activeView) && <TaskList tasks={tasks} compact onOpenPath={openPath} />}
+        {!['sync', 'socialAccounts', 'socialWorks', 'localWorks', 'oneClickPublish', 'aiParamLibrary'].includes(activeView) && <TaskList tasks={tasks} compact onOpenPath={openPath} />}
         {addAccountModal.open && (
           <AddMediaAccountModal
             modal={addAccountModal}
@@ -1907,6 +1946,27 @@ function App() {
             onClose={() => setAddAccountModal((current) => ({ ...current, open: false }))}
             onLoginAdd={addSocialAccountByLogin}
             onCookieAdd={addSocialAccountByCookie}
+          />
+        )}
+        {workPathModalOpen && (
+          <WorkPathModal
+            value={workPathDraft}
+            onChange={setWorkPathDraft}
+            onChoose={chooseLocalWorksPath}
+            onSave={saveLocalWorksPath}
+            onClose={() => setWorkPathModalOpen(false)}
+          />
+        )}
+        {selectedLocalWork && (
+          <LocalWorkChildrenModal
+            work={selectedLocalWork}
+            selectedChild={selectedChildWork}
+            onSelectChild={setSelectedChildWork}
+            onBack={() => setSelectedChildWork(null)}
+            onClose={() => {
+              setSelectedLocalWork(null);
+              setSelectedChildWork(null);
+            }}
           />
         )}
         {selectedPrompt && (
@@ -2020,6 +2080,143 @@ function PromptLibraryView({
         </div>
       </div>
     </section>
+  );
+}
+
+function LocalWorksView({ works, worksPath, onSetPath, onOpenPath, onOpenChildren }) {
+  function workMdPath(work) {
+    if (!worksPath) return work.mdFile;
+    return `${worksPath}\\${work.folderName}\\${work.mdFile}`;
+  }
+
+  return (
+    <section className="panel localWorksPanel">
+      <div className="panelHeader localWorksHeader">
+        <div>
+          <h2>本地作品列表</h2>
+          <span>{worksPath || '尚未设置作品存放路径'}</span>
+        </div>
+        <button type="button" onClick={onSetPath}>设置作品路径</button>
+      </div>
+      <div className="localWorkTable">
+        <div className="localWorkRow head">
+          <span>序号</span>
+          <span>标题</span>
+          <span>MD文件</span>
+          <span>子作品数量</span>
+          <span>发布状态</span>
+          <span>操作</span>
+        </div>
+        {works.map((work) => (
+          <div className="localWorkRow" key={work.id}>
+            <span>{work.serialNo}</span>
+            <span title={work.title}>{work.title}</span>
+            <span title={workMdPath(work)}>{workMdPath(work)}</span>
+            <span>
+              {work.children.length > 0 ? (
+                <button type="button" className="linkButton" onClick={() => onOpenChildren(work)}>
+                  {work.children.length} 个
+                </button>
+              ) : (
+                '0 个'
+              )}
+            </span>
+            <span><em className={`publishStatus ${statusClassName(work.publishStatus)}`}>{work.publishStatus}</em></span>
+            <span className="rowActions">
+              <button type="button" onClick={() => onOpenPath(workMdPath(work))} disabled={!worksPath}>打开MD</button>
+              {worksPath && <button type="button" onClick={() => onOpenPath(`${worksPath}\\${work.folderName}`)}>打开目录</button>}
+            </span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function WorkPathModal({ value, onChange, onChoose, onSave, onClose }) {
+  return (
+    <div className="modalBackdrop">
+      <div className="mediaAccountModal workPathModal">
+        <div className="modalHeader">
+          <h2>设置作品路径</h2>
+          <button className="iconButton" onClick={onClose}>×</button>
+        </div>
+        <div className="modalSection">
+          <label>
+            作品存放路径
+            <div className="pathRow">
+              <input value={value} onChange={(event) => onChange(event.target.value)} placeholder="请选择本地作品根目录" />
+              <button type="button" onClick={onChoose}>选择</button>
+            </div>
+          </label>
+          <div className="toolIntro">
+            <p>后续本地作品会统一存放到此目录下面，例如：作品路径 / 作品目录 / index.md / children。</p>
+          </div>
+        </div>
+        <div className="modalActions">
+          <button type="button" className="secondaryButton" onClick={onClose}>取消</button>
+          <button type="button" onClick={onSave}>保存</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LocalWorkChildrenModal({ work, selectedChild, onSelectChild, onBack, onClose }) {
+  return (
+    <div className="modalBackdrop">
+      <div className="mediaAccountModal localChildrenModal">
+        <div className="modalHeader">
+          <div>
+            <h2>{selectedChild ? selectedChild.title : work.title}</h2>
+            <p>{selectedChild ? `${selectedChild.platform} · ${selectedChild.publishStatus}` : `子作品 ${work.children.length} 个`}</p>
+          </div>
+          <button className="iconButton" onClick={onClose}>×</button>
+        </div>
+        {selectedChild ? (
+          <div className="xhsPreview">
+            <div className="xhsImageStrip">
+              {selectedChild.imagePaths.map((imagePath, index) => (
+                <img key={`${imagePath}-${index}`} src={imagePath} alt={`${selectedChild.title} ${index + 1}`} />
+              ))}
+            </div>
+            <article className="xhsPostBody">
+              <div className="promptTagList">
+                <small>{selectedChild.platform}</small>
+                <small className={statusClassName(selectedChild.publishStatus)}>{selectedChild.publishStatus}</small>
+              </div>
+              <h3>{selectedChild.title}</h3>
+              <p>{selectedChild.content}</p>
+              <div className="promptTagList">
+                {selectedChild.tags.map((tag) => (
+                  <small key={tag}>#{tag}</small>
+                ))}
+              </div>
+            </article>
+          </div>
+        ) : (
+          <div className="localChildMasonry">
+            {work.children.map((child) => (
+              <button className="localChildCard" key={child.id} onClick={() => onSelectChild(child)}>
+                <img src={child.imagePaths[0]} alt={child.title} />
+                <div>
+                  <strong>{child.title}</strong>
+                  <p>{child.content}</p>
+                  <span>
+                    <small>{child.platform}</small>
+                    <em className={`publishStatus ${statusClassName(child.publishStatus)}`}>{child.publishStatus}</em>
+                  </span>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="modalActions">
+          {selectedChild && <button type="button" className="secondaryButton" onClick={onBack}>返回子作品</button>}
+          <button type="button" onClick={onClose}>关闭</button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -2407,6 +2604,7 @@ function viewTitle(activeView) {
   if (activeView === 'sync') return 'Web 协同';
   if (activeView === 'socialAccounts') return '账号管理';
   if (activeView === 'socialWorks') return '作品管理';
+  if (activeView === 'localWorks') return '本地作品管理';
   if (activeView === 'oneClickPublish') return '一键发布';
   if (activeView === 'removeAiMark') return '去AI标识';
   if (activeView === 'imageDuplicate') return '图片复制';
@@ -2423,6 +2621,7 @@ function viewSubtitle(activeView) {
   if (activeView === 'sync') return '连接 MediapolotX Web，获取任务队列并回传处理状态。';
   if (activeView === 'socialAccounts') return '管理公众号和小红书账号，使用独立 Cookie/session 打开真实平台后台。';
   if (activeView === 'socialWorks') return '打开公众号和小红书作品管理页，后续接入作品数据抓取。';
+  if (activeView === 'localWorks') return '管理本机 Markdown 主作品和拆分后的自媒体子作品。';
   if (activeView === 'oneClickPublish') return '打开平台发布页并自动填充标题、正文和标签，最终发布由人工确认。';
   if (activeView === 'removeAiMark') return '工具集能力：面向图片中的 AI 标识、水印和平台痕迹处理。';
   if (activeView === 'imageDuplicate') return '按参数组合批量生成多套轻微不同的图片副本。';
@@ -2442,6 +2641,13 @@ function getSiblingBackupDir(folderPath) {
   const name = parts.at(-1) || 'backup';
   const parent = folderPath.slice(0, Math.max(0, folderPath.length - name.length)).replace(/[\\/]$/, '');
   return `${parent}\\${name}_mediapolotx_backup`;
+}
+
+function statusClassName(status) {
+  if (status === '已发布') return 'published';
+  if (status === '部分发布') return 'partial';
+  if (status === '发布失败') return 'failed';
+  return 'draft';
 }
 
 function formatBytes(bytes) {
