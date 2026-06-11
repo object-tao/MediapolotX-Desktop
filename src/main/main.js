@@ -200,6 +200,10 @@ function registerIpc() {
 
   ipcMain.handle('social:saveAccount', (_event, payload) => socialAccountManager.saveAccount(payload));
 
+  ipcMain.handle('social:startLoginAccount', async (_event, payload) => (
+    startSocialLoginAccount(payload)
+  ));
+
   ipcMain.handle('social:deleteAccount', async (_event, accountId) => {
     hideSocialBrowser(accountId);
     const view = socialBrowserViews.get(accountId);
@@ -370,6 +374,83 @@ function getSocialBrowserView(accountId) {
   return view;
 }
 
+async function startSocialLoginAccount(payload = {}) {
+  const platformKey = payload.platform || 'xiaohongshu';
+  const platform = socialAccountManager.getPlatform(platformKey);
+  const accountId = payload.accountId || `login-${Date.now()}`;
+  const partition = getSocialPartition(accountId);
+  const loginWindow = new BrowserWindow({
+    width: 1180,
+    height: 760,
+    title: `登录 ${platform.label}`,
+    parent: mainWindow,
+    modal: false,
+    backgroundColor: '#ffffff',
+    webPreferences: {
+      partition,
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true
+    }
+  });
+
+  let settled = false;
+  let interval = null;
+
+  const cleanup = () => {
+    if (interval) clearInterval(interval);
+    interval = null;
+  };
+
+  const finish = async (profile) => {
+    if (settled) return null;
+    settled = true;
+    cleanup();
+    const account = socialAccountManager.saveAccount({
+      id: accountId,
+      platform: platformKey,
+      nickname: profile.nickname || platform.label,
+      platformUserId: profile.platformUserId || '',
+      avatarUrl: profile.avatarUrl || '',
+      groupName: payload.groupName || '默认分组',
+      remark: payload.remark || '',
+      status: 'online'
+    });
+    if (!loginWindow.isDestroyed()) loginWindow.close();
+    return account;
+  };
+
+  loginWindow.webContents.on('did-finish-load', () => {
+    injectSocialLoginBanner(loginWindow, platform.label);
+  });
+
+  const loginUrl = platform.homeUrl;
+  await loginWindow.loadURL(loginUrl);
+
+  return new Promise((resolve, reject) => {
+    interval = setInterval(async () => {
+      if (loginWindow.isDestroyed() || settled) return;
+      try {
+        const profile = await loginWindow.webContents.executeJavaScript(buildSocialProfileScript(platformKey), true);
+        if (profile?.loggedIn) {
+          const account = await finish(profile);
+          resolve(account);
+        }
+      } catch {
+        // Pages may navigate across origins while logging in; keep polling.
+      }
+    }, 3000);
+
+    loginWindow.on('closed', () => {
+      cleanup();
+      if (!settled) {
+        settled = true;
+        reject(new Error('登录识别窗口已关闭，未识别到账号'));
+      }
+    });
+  });
+}
+
 function getSocialPartition(accountId) {
   return `persist:social-account-${accountId}`;
 }
@@ -467,4 +548,81 @@ function buildPublishFillScript(form) {
       return { titleFilled, contentFilled, tagsFilled };
     })();
   `;
+}
+
+function injectSocialLoginBanner(loginWindow, platformLabel) {
+  if (loginWindow.isDestroyed()) return;
+  const script = `
+    (() => {
+      if (document.getElementById('mediapolotx-login-banner')) return;
+      const banner = document.createElement('div');
+      banner.id = 'mediapolotx-login-banner';
+      banner.style.cssText = [
+        'position:fixed',
+        'z-index:2147483647',
+        'left:0',
+        'right:0',
+        'top:0',
+        'background:#fff8db',
+        'border-bottom:1px solid #f0cf6b',
+        'color:#f03b32',
+        'font-size:15px',
+        'line-height:1.8',
+        'padding:8px 18px',
+        'font-family:Arial,Microsoft YaHei,sans-serif',
+        'box-shadow:0 2px 8px rgba(0,0,0,.08)'
+      ].join(';');
+      banner.innerHTML = '<strong>请登录 ${escapeJs(platformLabel)}。</strong> 登录后会自动识别平台账号，识别过程大概需要几秒到十几秒，请勿关闭窗口；识别完成后将自动关闭。';
+      document.documentElement.appendChild(banner);
+      document.body.style.paddingTop = '56px';
+    })();
+  `;
+  loginWindow.webContents.executeJavaScript(script, true).catch(() => {});
+}
+
+function buildSocialProfileScript(platform) {
+  if (platform === 'wechat') {
+    return `
+      (() => {
+        const text = document.body?.innerText || '';
+        const loggedIn = /首页|新的创作|群发|草稿箱|公众号设置|账号详情/.test(text) && !/扫码登录|登录/.test(text.slice(0, 500));
+        const img = [...document.querySelectorAll('img')].find((item) => item.src && item.width >= 24 && item.height >= 24);
+        const title = document.title.replace(/微信公众平台|公众平台/g, '').trim();
+        return {
+          loggedIn,
+          nickname: title || '公众号账号',
+          platformUserId: '',
+          avatarUrl: img?.src || ''
+        };
+      })();
+    `;
+  }
+
+  return `
+    (() => {
+      const text = document.body?.innerText || '';
+      const hasLoginForm = /手机号|验证码|登录|扫码登录/.test(text) && /用户协议|隐私政策/.test(text);
+      const xhsIdMatch = text.match(/小红书号[：:\\s]+([A-Za-z0-9_-]{4,})/) || text.match(/RED ID[：:\\s]+([A-Za-z0-9_-]{4,})/i);
+      const accountOk = /账号状态正常|账号正常|创作服务平台|笔记管理|数据看板/.test(text);
+      const avatar = [...document.querySelectorAll('img')]
+        .filter((img) => img.src && img.width >= 32 && img.height >= 32)
+        .map((img) => img.src)
+        .find((src) => !/logo|icon|svg/i.test(src)) || '';
+      const candidates = [...document.querySelectorAll('span,div,p,strong')]
+        .map((node) => (node.innerText || '').trim())
+        .filter((value) => value && value.length <= 24 && !/[：:]/.test(value));
+      const blocked = new Set(['首页', '笔记管理', '数据看板', '活动中心', '创作学院', '创作百科', '发布笔记', '登录', '账号状态正常']);
+      const nickname = candidates.find((value) => !blocked.has(value) && !/^\\d+$/.test(value)) || '';
+      return {
+        loggedIn: !hasLoginForm && Boolean(accountOk || xhsIdMatch),
+        nickname: nickname || '小红书账号',
+        platformUserId: xhsIdMatch?.[1] || '',
+        avatarUrl: avatar
+      };
+    })();
+  `;
+}
+
+function escapeJs(value) {
+  return String(value).replaceAll('\\', '\\\\').replaceAll("'", "\\'");
 }

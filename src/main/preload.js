@@ -55,6 +55,7 @@ contextBridge.exposeInMainWorld('mediapolotx', {
     platforms: () => ipcRenderer.invoke('social:platforms'),
     listAccounts: () => ipcRenderer.invoke('social:listAccounts'),
     saveAccount: (payload) => ipcRenderer.invoke('social:saveAccount', payload),
+    startLoginAccount: (payload) => ipcRenderer.invoke('social:startLoginAccount', payload),
     deleteAccount: (accountId) => ipcRenderer.invoke('social:deleteAccount', accountId),
     openAccount: (payload) => ipcRenderer.invoke('social:openAccount', payload),
     navigate: (payload) => ipcRenderer.invoke('social:navigate', payload),

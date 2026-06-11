@@ -31,6 +31,19 @@ const socialPlatformFallbacks = [
   { value: 'wechat', label: '公众号' }
 ];
 
+const mediaPlatformCards = [
+  { value: 'xiaohongshu', label: '小红书', icon: '小', enabled: true },
+  { value: 'wechat', label: '公众号', icon: '公', enabled: true },
+  { value: 'douyin', label: '抖音', icon: '抖', enabled: false },
+  { value: 'shipinhao', label: '视频号', icon: '视', enabled: false },
+  { value: 'kuaishou', label: '快手', icon: '快', enabled: false },
+  { value: 'bilibili', label: '哔哩哔哩', icon: 'B', enabled: false },
+  { value: 'toutiao', label: '头条号', icon: '头', enabled: false },
+  { value: 'baijiahao', label: '百家号', icon: '百', enabled: false },
+  { value: 'zhihu', label: '知乎', icon: '知', enabled: false },
+  { value: 'custom', label: '自定义平台', icon: '+', enabled: false }
+];
+
 function providerLabel(providers, value) {
   return providers.find((provider) => provider.value === value)?.label || value;
 }
@@ -135,16 +148,16 @@ function App() {
   const [socialPlatforms, setSocialPlatforms] = useState(socialPlatformFallbacks);
   const [socialAccounts, setSocialAccounts] = useState([]);
   const [selectedSocialAccountId, setSelectedSocialAccountId] = useState('');
-  const [socialAccountForm, setSocialAccountForm] = useState({
-    platform: 'xiaohongshu',
-    nickname: '',
-    platformUserId: '',
-    groupName: '默认分组',
-    remark: '',
-    avatarUrl: ''
-  });
   const [socialBrowserState, setSocialBrowserState] = useState({ url: '', title: '', canGoBack: false, canGoForward: false });
   const [cookieText, setCookieText] = useState('');
+  const [addAccountModal, setAddAccountModal] = useState({
+    open: false,
+    platform: 'xiaohongshu',
+    groupName: '默认分组',
+    proxyMode: 'none',
+    cookieText: '',
+    showCookieInput: false
+  });
   const [publishForm, setPublishForm] = useState({
     title: '',
     content: '',
@@ -289,24 +302,49 @@ function App() {
     if (mediaPaths.length) setPublishForm((current) => ({ ...current, mediaPaths }));
   }
 
-  async function saveSocialAccount(event) {
-    event.preventDefault();
+  async function addSocialAccountByLogin() {
+    setBusy(true);
+    setMessage('请在弹出的登录窗口中完成登录，系统会自动识别账号...');
+    try {
+      const account = await window.mediapolotx.social.startLoginAccount({
+        platform: addAccountModal.platform,
+        groupName: addAccountModal.groupName,
+        proxyMode: addAccountModal.proxyMode
+      });
+      await refreshSocialAccounts();
+      setSelectedSocialAccountId(account.id);
+      setAddAccountModal((current) => ({ ...current, open: false, showCookieInput: false, cookieText: '' }));
+      setMessage(`账号已添加：${account.nickname}`);
+      await openSocialAccount(account);
+    } catch (error) {
+      setMessage(`添加账号失败：${cleanRemoteError(error)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function addSocialAccountByCookie() {
+    if (!addAccountModal.cookieText.trim()) return;
     setBusy(true);
     try {
-      const saved = await window.mediapolotx.social.saveAccount(socialAccountForm);
-      await refreshSocialAccounts();
-      setSelectedSocialAccountId(saved.id);
-      setSocialAccountForm({
-        platform: socialAccountForm.platform,
-        nickname: '',
-        platformUserId: '',
-        groupName: '默认分组',
-        remark: '',
-        avatarUrl: ''
+      const platform = socialPlatforms.find((item) => item.value === addAccountModal.platform);
+      const account = await window.mediapolotx.social.saveAccount({
+        platform: addAccountModal.platform,
+        nickname: `${platform?.label || '媒体'}账号`,
+        groupName: addAccountModal.groupName,
+        status: 'unknown'
       });
-      setMessage('账号已保存');
+      await window.mediapolotx.social.importCookies({
+        accountId: account.id,
+        cookies: addAccountModal.cookieText
+      });
+      await refreshSocialAccounts();
+      setSelectedSocialAccountId(account.id);
+      setAddAccountModal((current) => ({ ...current, open: false, showCookieInput: false, cookieText: '' }));
+      setMessage(`Cookie 已导入：${account.nickname}`);
+      await openSocialAccount(account);
     } catch (error) {
-      setMessage(`账号保存失败：${cleanRemoteError(error)}`);
+      setMessage(`Cookie 添加失败：${cleanRemoteError(error)}`);
     } finally {
       setBusy(false);
     }
@@ -1065,32 +1103,10 @@ function App() {
         {activeView === 'socialAccounts' && (
           <section className="socialShell">
             <div className="panel socialAccountPanel">
-              <h2>添加账号</h2>
-              <form className="form" onSubmit={saveSocialAccount}>
-                <label>
-                  平台
-                  <select value={socialAccountForm.platform} onChange={(event) => setSocialAccountForm({ ...socialAccountForm, platform: event.target.value })}>
-                    {socialPlatforms.map((platform) => <option key={platform.value} value={platform.value}>{platform.label}</option>)}
-                  </select>
-                </label>
-                <label>
-                  昵称
-                  <input value={socialAccountForm.nickname} onChange={(event) => setSocialAccountForm({ ...socialAccountForm, nickname: event.target.value })} placeholder="账号昵称" />
-                </label>
-                <label>
-                  平台 ID
-                  <input value={socialAccountForm.platformUserId} onChange={(event) => setSocialAccountForm({ ...socialAccountForm, platformUserId: event.target.value })} placeholder="小红书号/公众号原始ID等" />
-                </label>
-                <label>
-                  分组
-                  <input value={socialAccountForm.groupName} onChange={(event) => setSocialAccountForm({ ...socialAccountForm, groupName: event.target.value })} />
-                </label>
-                <label>
-                  备注
-                  <input value={socialAccountForm.remark} onChange={(event) => setSocialAccountForm({ ...socialAccountForm, remark: event.target.value })} />
-                </label>
-                <button type="submit" disabled={busy || !socialAccountForm.nickname}>保存账号</button>
-              </form>
+              <div className="panelHeader">
+                <h2>媒体账号</h2>
+                <button type="button" onClick={() => setAddAccountModal((current) => ({ ...current, open: true }))}>+ 添加账号</button>
+              </div>
               <SocialAccountList
                 accounts={socialAccounts}
                 platforms={socialPlatforms}
@@ -1652,6 +1668,17 @@ function App() {
         )}
 
         {!['sync', 'socialAccounts', 'oneClickPublish'].includes(activeView) && <TaskList tasks={tasks} compact onOpenPath={openPath} />}
+        {addAccountModal.open && (
+          <AddMediaAccountModal
+            modal={addAccountModal}
+            platforms={mediaPlatformCards}
+            busy={busy}
+            onChange={setAddAccountModal}
+            onClose={() => setAddAccountModal((current) => ({ ...current, open: false }))}
+            onLoginAdd={addSocialAccountByLogin}
+            onCookieAdd={addSocialAccountByCookie}
+          />
+        )}
         {message && <div className="toast">{message}</div>}
       </main>
     </div>
@@ -1849,6 +1876,70 @@ function SocialAccountList({ accounts, platforms, selectedId, onSelect, onDelete
         </div>
       ))}
       {accounts.length === 0 && <div className="empty">暂无账号</div>}
+    </div>
+  );
+}
+
+function AddMediaAccountModal({ modal, platforms, busy, onChange, onClose, onLoginAdd, onCookieAdd }) {
+  const selectedPlatform = platforms.find((platform) => platform.value === modal.platform);
+
+  return (
+    <div className="modalBackdrop">
+      <div className="mediaAccountModal">
+        <div className="modalHeader">
+          <h2>添加媒体账号</h2>
+          <button type="button" onClick={onClose}>×</button>
+        </div>
+        <section className="modalSection">
+          <h3>选择媒体平台</h3>
+          <div className="platformGrid">
+            {platforms.map((platform) => (
+              <button
+                type="button"
+                key={platform.value}
+                className={`platformCard ${modal.platform === platform.value ? 'selected' : ''}`}
+                disabled={!platform.enabled}
+                onClick={() => onChange((current) => ({ ...current, platform: platform.value }))}
+              >
+                <span>{platform.icon}</span>
+                <strong>{platform.label}</strong>
+                {!platform.enabled && <em>暂未支持</em>}
+              </button>
+            ))}
+          </div>
+        </section>
+        <section className="modalSection">
+          <h3>添加到分组</h3>
+          <input value={modal.groupName} onChange={(event) => onChange((current) => ({ ...current, groupName: event.target.value }))} />
+        </section>
+        <section className="modalSection">
+          <h3>使用代理IP</h3>
+          <select value={modal.proxyMode} onChange={(event) => onChange((current) => ({ ...current, proxyMode: event.target.value }))}>
+            <option value="none">不使用</option>
+          </select>
+          <small>代理服务器管理后续在设置中补充。</small>
+        </section>
+        {modal.showCookieInput && (
+          <section className="modalSection">
+            <h3>导入 CK(cookie)</h3>
+            <textarea value={modal.cookieText} onChange={(event) => onChange((current) => ({ ...current, cookieText: event.target.value }))} placeholder="粘贴 Cookie JSON 数组" />
+          </section>
+        )}
+        <div className="modalActions">
+          <button type="button" onClick={onClose}>取消</button>
+          <button
+            type="button"
+            onClick={() => {
+              if (modal.showCookieInput) onCookieAdd();
+              else onChange((current) => ({ ...current, showCookieInput: true }));
+            }}
+            disabled={busy || !selectedPlatform?.enabled}
+          >
+            导入CK(cookie)添加
+          </button>
+          <button type="button" className="primaryButton" onClick={onLoginAdd} disabled={busy || !selectedPlatform?.enabled}>打开登录页面添加</button>
+        </div>
+      </div>
     </div>
   );
 }
