@@ -1,4 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Bot,
+  Clapperboard,
+  Copy,
+  FileText,
+  FolderOpen,
+  GalleryVerticalEnd,
+  Image as ImageIcon,
+  Library,
+  Megaphone,
+  PenLine,
+  RefreshCw,
+  Send,
+  Settings,
+  SlidersHorizontal,
+  Sparkles,
+  UserRoundCog,
+  Wrench
+} from 'lucide-react';
 
 const storageTypes = [
   { value: 'local', label: '本机目录' },
@@ -96,6 +115,38 @@ function providerLabel(providers, value) {
 
 function cleanRemoteError(error) {
   return String(error?.message || error || '').replace(/^Error invoking remote method '[^']+':\s*/, '');
+}
+
+const navIconByView = {
+  library: Library,
+  image: ImageIcon,
+  video: Clapperboard,
+  sync: RefreshCw,
+  socialAccounts: UserRoundCog,
+  socialWorks: GalleryVerticalEnd,
+  oneClickPublish: Send,
+  removeAiMark: Sparkles,
+  imageDuplicate: Copy,
+  wechatMarkdown: FileText,
+  articleRewrite: PenLine,
+  aiModelConfig: Bot,
+  aiParamLibrary: SlidersHorizontal
+};
+
+const navIconByGroup = {
+  contentAssets: FolderOpen,
+  socialManagement: Megaphone,
+  toolkit: Wrench,
+  baseConfig: Settings
+};
+
+function NavIcon({ icon, view, groupKey }) {
+  const Icon = view ? navIconByView[view] : navIconByGroup[groupKey];
+  return (
+    <span className="navIcon">
+      {Icon ? <Icon size={17} strokeWidth={2.1} /> : icon}
+    </span>
+  );
 }
 
 function App() {
@@ -959,19 +1010,22 @@ function App() {
                 title={group.title}
                 onClick={() => setNavGroupExpanded((current) => ({ ...current, [group.key]: !current[group.key] }))}
               >
-                <span>{sidebarCollapsed ? group.shortTitle : group.title}</span>
+                <span className="navGroupLabel">
+                  <NavIcon groupKey={group.key} />
+                  <span className="navGroupText">{sidebarCollapsed ? group.shortTitle : group.title}</span>
+                </span>
                 <em>{navGroupExpanded[group.key] ? '▾' : '▸'}</em>
               </button>
               {navGroupExpanded[group.key] && group.items.map((item) => (
                   <button
                     key={item.view}
                     className={`navItem subItem ${activeView === item.view ? 'active' : ''}`}
-                    onClick={() => setActiveView(item.view)}
-                    title={item.label}
-                  >
-                    <span className="navIcon">{item.icon}</span>
-                    <span className="navText">{item.label}</span>
-                  </button>
+                  onClick={() => setActiveView(item.view)}
+                  title={item.label}
+                >
+                  <NavIcon icon={item.icon} view={item.view} />
+                  <span className="navText">{item.label}</span>
+                </button>
                 ))}
             </div>
           ))}
@@ -982,7 +1036,7 @@ function App() {
               onClick={() => setActiveView(item.view)}
               title={item.label}
             >
-              <span className="navIcon">{item.icon}</span>
+              <NavIcon icon={item.icon} view={item.view} />
               <span className="navText">{item.label}</span>
             </button>
           ))}

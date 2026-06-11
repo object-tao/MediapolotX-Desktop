@@ -128,6 +128,17 @@ nav {
   text-align: left;
 }
 
+.navGroupLabel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.navGroupText {
+  white-space: nowrap;
+}
+
 .navGroupTitle em {
   color: #8fa0b4;
   font-style: normal;
@@ -148,9 +159,11 @@ nav {
   place-items: center;
   background: rgba(255, 255, 255, 0.08);
   color: #dbe6f2;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0;
+}
+
+.navIcon svg {
+  width: 17px;
+  height: 17px;
 }
 
 .navText {
@@ -202,6 +215,14 @@ nav {
 }
 
 .sidebarCollapsed .navGroupTitle em {
+  display: none;
+}
+
+.sidebarCollapsed .navGroupLabel {
+  justify-content: center;
+}
+
+.sidebarCollapsed .navGroupText {
   display: none;
 }
 
