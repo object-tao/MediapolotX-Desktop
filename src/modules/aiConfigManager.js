@@ -6,7 +6,7 @@ const SETTING_KEY = 'aiModelConfig';
 const PROVIDERS = {
   openai: { label: 'OpenAI', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4.1-mini', visionModel: 'gpt-4o-mini', auth: 'bearer' },
   gemini: { label: 'Gemini', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-2.0-flash', visionModel: 'gemini-2.0-flash', auth: 'bearer' },
-  qwen: { label: '通义千问', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-plus', visionModel: 'qwen-vl-plus', auth: 'bearer' },
+  qwen: { label: '通义千问', baseUrl: 'https://dashscope.aliyuncs.com/api/v2/apps/protocols/compatible-mode/v1', model: 'qwen3.7-plus', visionModel: 'qwen-vl-plus', auth: 'bearer', testMode: 'responses' },
   deepseek: { label: 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-chat', visionModel: 'deepseek-chat', auth: 'bearer' },
   zhipu: { label: '智谱 GLM', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4-flash', visionModel: 'glm-4v-flash', auth: 'bearer' },
   doubao: { label: '豆包/火山方舟', baseUrl: 'https://ark.cn-beijing.volces.com/api/v3', model: 'doubao-seed-2-0-pro-260215', visionModel: 'doubao-seed-2-0-pro-260215', resourceId: '', auth: 'raw', testMode: 'responses' },
@@ -82,7 +82,7 @@ function createAiConfigManager(settingsManager, safeStorage) {
     const modelName = getRequestModelName(normalized);
     if (!modelName) throw new Error('模型 ID 不能为空');
     try {
-      const response = normalized.provider === 'doubao'
+      const response = usesResponsesApi(normalized)
         ? await postResponsesRequest(normalized, headers, [{ role: 'user', content: 'ping' }], { maxTokens: 32, temperature: 0, timeout: 20000 })
         : await axios.post(buildChatCompletionsUrl(normalized.baseUrl), {
           model: modelName,
@@ -109,7 +109,7 @@ function createAiConfigManager(settingsManager, safeStorage) {
     const headers = createRequestHeaders(provider, apiKey);
 
     try {
-      if (model.provider === 'doubao') {
+      if (usesResponsesApi(model)) {
         const response = await postResponsesRequest(model, headers, options.messages, {
           temperature: Number(options.temperature ?? model.temperature ?? 0.5),
           maxTokens: Number(options.maxTokens ?? model.maxTokens ?? 4096),
@@ -233,7 +233,7 @@ function normalizeModel(model = {}) {
     encryptedApiKey: model.encryptedApiKey || '',
     apiKey: model.apiKey || '',
     resourceId: model.resourceId || defaults.resourceId || '',
-    model: model.model || defaults.model,
+    model: normalizeProviderModel(provider, model.model || defaults.model),
     type: model.type || 'both',
     temperature: Number(model.temperature ?? 0.2),
     maxTokens: Number(model.maxTokens ?? 4096),
@@ -261,9 +261,18 @@ function getRequestModelName(model) {
 function normalizeProviderBaseUrl(provider, baseUrl) {
   const normalized = trimTrailingSlash(baseUrl);
   if (provider === 'qwen' && /dashscope\.aliyuncs\.com/i.test(normalized)) {
-    return 'https://dashscope.aliyuncs.com/compatible-mode/v1';
+    return 'https://dashscope.aliyuncs.com/api/v2/apps/protocols/compatible-mode/v1';
   }
   return normalized.replace(/\/chat\/completions$/i, '');
+}
+
+function normalizeProviderModel(provider, modelName) {
+  if (provider === 'qwen' && modelName === 'qwen-plus') return 'qwen3.7-plus';
+  return modelName;
+}
+
+function usesResponsesApi(model) {
+  return getProviderDefaults(model.provider).testMode === 'responses';
 }
 
 function buildChatCompletionsUrl(baseUrl) {
@@ -291,18 +300,24 @@ function messagesToResponsesInput(messages = []) {
 }
 
 function postResponsesRequest(model, headers, messages, options = {}) {
-  return axios.post(`${trimTrailingSlash(model.baseUrl)}/responses`, {
+  const body = {
     model: getRequestModelName(model),
     input: messagesToResponsesInput(messages),
     temperature: Number(options.temperature ?? model.temperature ?? 0.5),
     max_output_tokens: Number(options.maxTokens ?? model.maxTokens ?? 4096)
-  }, { timeout: Number(options.timeout ?? 120000), headers });
+  };
+  if (model.provider === 'qwen') body.enable_thinking = true;
+  return axios.post(`${trimTrailingSlash(model.baseUrl)}/responses`, body, { timeout: Number(options.timeout ?? 120000), headers });
 }
 
 function extractResponseText(data) {
   if (!data) return '';
   if (typeof data.output_text === 'string') return data.output_text;
   if (Array.isArray(data.output)) {
+    const messageText = data.output.filter((item) => item.type === 'message').flatMap((item) => (
+      Array.isArray(item.content) ? item.content : []
+    )).map((content) => content.text || '').filter(Boolean).join('\n');
+    if (messageText) return messageText;
     return data.output.flatMap((item) => (
       Array.isArray(item.content) ? item.content : []
     )).map((content) => content.text || '').filter(Boolean).join('\n');
@@ -326,7 +341,7 @@ function formatTestError(error, model) {
       hint = '豆包/火山方舟请确认 API Base URL 为 https://ark.cn-beijing.volces.com/api/v3，模型 ID 例如 doubao-seed-2-0-pro-260215，当前使用 /responses 接口。';
     }
     if (model.provider === 'qwen') {
-      hint = '通义千问请确认 API Base URL 为 https://dashscope.aliyuncs.com/compatible-mode/v1，模型 ID 例如 qwen-plus、qwen-turbo、qwen-max，不要填写资源 ID。';
+      hint = '通义千问 Responses 接口请确认 API Base URL 为 https://dashscope.aliyuncs.com/api/v2/apps/protocols/compatible-mode/v1，模型 ID 例如 qwen3.7-plus，不要填写资源 ID。';
     }
     return `接口返回 404：${hint}`;
   }

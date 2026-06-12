@@ -205,17 +205,22 @@ try {
     enabled: true
   });
   let qwenRequestModel = '';
+  let qwenRequestUrl = '';
   const originalAxiosPost = require('axios').post;
-  require('axios').post = async (_url, body) => {
+  require('axios').post = async (url, body) => {
+    qwenRequestUrl = url;
     qwenRequestModel = body.model;
-    return { data: { choices: [{ message: { content: 'pong' } }] } };
+    return { data: { output: [{ type: 'message', content: [{ text: 'pong' }] }] } };
   };
   try {
     await aiConfigManager.testModel(qwenWithStaleResource);
   } finally {
     require('axios').post = originalAxiosPost;
   }
-  if (qwenRequestModel !== 'qwen-plus') {
+  if (
+    qwenRequestModel !== 'qwen3.7-plus'
+    || qwenRequestUrl !== 'https://dashscope.aliyuncs.com/api/v2/apps/protocols/compatible-mode/v1/responses'
+  ) {
     throw new Error('Qwen stale resource ID smoke test failed.');
   }
 
