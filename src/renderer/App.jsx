@@ -168,6 +168,53 @@ function NavIcon({ icon, view, groupKey }) {
   );
 }
 
+function createDefaultAiToolOptions() {
+  return {
+    folderPath: '',
+    includeJpg: true,
+    includePng: true,
+    selectedPaths: [],
+    replaceOriginal: true,
+    backupOriginal: true,
+    outputDir: '',
+    backupDir: '',
+    watermark: {
+      enabled: true,
+      text: 'qtddp',
+      color: 'rgb(80,80,80)',
+      opacity: 0.45,
+      fontSize: 54
+    },
+    jpegQuality: 95
+  };
+}
+
+function createDefaultDuplicateOptions() {
+  return {
+    folderPath: '',
+    qualityStart: 99,
+    qualityEnd: 70,
+    qualityStep: 1,
+    widthStart: 5,
+    widthEnd: 5,
+    widthStep: 1,
+    heightStart: 5,
+    heightEnd: 5,
+    heightStep: 1,
+    brightnessStart: 0,
+    brightnessEnd: 0.01,
+    brightnessStep: 0.01,
+    selectedPaths: [],
+    watermark: {
+      enabled: true,
+      text: 'qtddp',
+      color: 'rgb(80,80,80)',
+      opacity: 0.45,
+      fontSize: 54
+    }
+  };
+}
+
 function App() {
   const socialBrowserRef = useRef(null);
   const [appStatus, setAppStatus] = useState(null);
@@ -198,49 +245,10 @@ function App() {
     outputDir: ''
   });
   const [syncOptions, setSyncOptions] = useState({ baseUrl: 'http://127.0.0.1:3000/api', token: '' });
-  const [aiToolOptions, setAiToolOptions] = useState({
-    folderPath: '',
-    includeJpg: true,
-    includePng: true,
-    selectedPaths: [],
-    replaceOriginal: true,
-    backupOriginal: true,
-    outputDir: '',
-    backupDir: '',
-    watermark: {
-      enabled: true,
-      text: 'qtddp',
-      color: 'rgb(80,80,80)',
-      opacity: 0.45,
-      fontSize: 54
-    },
-    jpegQuality: 95
-  });
+  const [aiToolOptions, setAiToolOptions] = useState(createDefaultAiToolOptions);
   const [aiToolFiles, setAiToolFiles] = useState([]);
   const [aiToolProgress, setAiToolProgress] = useState(null);
-  const [duplicateOptions, setDuplicateOptions] = useState({
-    folderPath: '',
-    qualityStart: 99,
-    qualityEnd: 70,
-    qualityStep: 1,
-    widthStart: 5,
-    widthEnd: 5,
-    widthStep: 1,
-    heightStart: 5,
-    heightEnd: 5,
-    heightStep: 1,
-    brightnessStart: 0,
-    brightnessEnd: 0.01,
-    brightnessStep: 0.01,
-    selectedPaths: [],
-    watermark: {
-      enabled: true,
-      text: 'qtddp',
-      color: 'rgb(80,80,80)',
-      opacity: 0.45,
-      fontSize: 54
-    }
-  });
+  const [duplicateOptions, setDuplicateOptions] = useState(createDefaultDuplicateOptions);
   const [duplicateFiles, setDuplicateFiles] = useState([]);
   const [duplicateProgress, setDuplicateProgress] = useState(null);
   const [wechatOptions, setWechatOptions] = useState({
@@ -1045,27 +1053,17 @@ function App() {
         return;
       }
       if (view === 'removeAiMark') {
-        const settings = await window.mediapolotx.settings.getAll();
-        const nextOptions = { ...aiToolOptions, ...(settings.aiToolOptions || {}) };
-        setAiToolOptions(nextOptions);
-        if (nextOptions.folderPath) {
-          await scanAiToolFolder(nextOptions);
-        } else {
-          setAiToolFiles([]);
-          setMessage('请先选择去AI标识的处理文件夹');
-        }
+        setAiToolOptions(createDefaultAiToolOptions());
+        setAiToolFiles([]);
+        setAiToolProgress(null);
+        setMessage('已清空去AI标识页面，请重新选择处理文件夹');
         return;
       }
       if (view === 'imageDuplicate') {
-        const settings = await window.mediapolotx.settings.getAll();
-        const nextOptions = { ...duplicateOptions, ...(settings.duplicateOptions || {}) };
-        setDuplicateOptions(nextOptions);
-        if (nextOptions.folderPath) {
-          await scanDuplicateFolder(nextOptions);
-        } else {
-          setDuplicateFiles([]);
-          setMessage('请先选择图片复制的源目录');
-        }
+        setDuplicateOptions(createDefaultDuplicateOptions());
+        setDuplicateFiles([]);
+        setDuplicateProgress(null);
+        setMessage('已清空图片复制页面，请重新选择源目录');
         return;
       }
       if (view === 'aiModelConfig') {
