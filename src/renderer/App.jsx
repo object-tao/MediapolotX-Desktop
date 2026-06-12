@@ -1044,12 +1044,28 @@ function App() {
         await loadImportedLocalWorks();
         return;
       }
-      if (view === 'removeAiMark' && aiToolOptions.folderPath) {
-        await scanAiToolFolder();
+      if (view === 'removeAiMark') {
+        const settings = await window.mediapolotx.settings.getAll();
+        const nextOptions = { ...aiToolOptions, ...(settings.aiToolOptions || {}) };
+        setAiToolOptions(nextOptions);
+        if (nextOptions.folderPath) {
+          await scanAiToolFolder(nextOptions);
+        } else {
+          setAiToolFiles([]);
+          setMessage('请先选择去AI标识的处理文件夹');
+        }
         return;
       }
-      if (view === 'imageDuplicate' && duplicateOptions.folderPath) {
-        await scanDuplicateFolder();
+      if (view === 'imageDuplicate') {
+        const settings = await window.mediapolotx.settings.getAll();
+        const nextOptions = { ...duplicateOptions, ...(settings.duplicateOptions || {}) };
+        setDuplicateOptions(nextOptions);
+        if (nextOptions.folderPath) {
+          await scanDuplicateFolder(nextOptions);
+        } else {
+          setDuplicateFiles([]);
+          setMessage('请先选择图片复制的源目录');
+        }
         return;
       }
       if (view === 'aiModelConfig') {
