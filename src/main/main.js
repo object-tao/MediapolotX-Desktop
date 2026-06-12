@@ -137,6 +137,14 @@ function registerIpc() {
     localWorkImporter.updateWorkTags(db, payload)
   ));
 
+  ipcMain.handle('localWorks:updateWorkStatus', async (_event, payload) => (
+    localWorkImporter.updateWorkPublishStatus(db, payload)
+  ));
+
+  ipcMain.handle('localWorks:updateChildStatus', async (_event, payload) => (
+    localWorkImporter.updateChildPublishStatus(db, payload)
+  ));
+
   ipcMain.handle('localWorks:delete', async (_event, payload) => (
     localWorkImporter.deleteImportedWork(db, payload)
   ));

@@ -909,6 +909,48 @@ textarea {
   color: #536173;
 }
 
+.publishStatusSelect {
+  max-width: 112px;
+  min-height: 30px;
+  border-radius: 999px;
+  padding: 4px 26px 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.publishStatusSelect.published {
+  border-color: #c8eadb;
+  background: #dbf4e9;
+  color: #176642;
+}
+
+.publishStatusSelect.partial {
+  border-color: #f4dfb6;
+  background: #fff4d8;
+  color: #855f00;
+}
+
+.publishStatusSelect.failed {
+  border-color: #efcaca;
+  background: #ffe1e1;
+  color: #9f2424;
+}
+
+.publishStatusSelect.draft {
+  border-color: #dce4ee;
+  background: #eef2f7;
+  color: #536173;
+}
+
+.modalInlineActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  color: #536173;
+  font-size: 13px;
+}
+
 .workPathModal {
   width: min(720px, calc(100vw - 48px));
 }

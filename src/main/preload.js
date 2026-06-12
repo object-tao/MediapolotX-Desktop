@@ -57,6 +57,8 @@ contextBridge.exposeInMainWorld('mediapolotx', {
     listImported: () => ipcRenderer.invoke('localWorks:listImported'),
     organizeImported: (payload) => ipcRenderer.invoke('localWorks:organizeImported', payload),
     updateTags: (payload) => ipcRenderer.invoke('localWorks:updateTags', payload),
+    updateWorkStatus: (payload) => ipcRenderer.invoke('localWorks:updateWorkStatus', payload),
+    updateChildStatus: (payload) => ipcRenderer.invoke('localWorks:updateChildStatus', payload),
     delete: (payload) => ipcRenderer.invoke('localWorks:delete', payload)
   },
   social: {

@@ -47,6 +47,8 @@ const articleLengthOptions = [
   { value: '短文', label: '短文' }
 ];
 
+const localWorkPublishStatuses = ['未发布', '已发布', '部分发布', '发布失败'];
+
 function createDefaultProxyConfig() {
   return {
     id: '',
@@ -1306,6 +1308,55 @@ function App() {
     }
   }
 
+  async function updateLocalWorkStatus(work, publishStatus) {
+    if (!work || work.publishStatus === publishStatus) return;
+    if (localWorksMode === 'scanned') {
+      setLocalWorksList((current) => current.map((item) => (
+        item.id === work.id ? { ...item, publishStatus } : item
+      )));
+      return;
+    }
+    const works = await window.mediapolotx.localWorks.updateWorkStatus({
+      workId: work.id,
+      publishStatus
+    });
+    setLocalWorksList(works);
+    setSelectedMainWork((current) => (current?.id === work.id ? { ...current, publishStatus } : current));
+    setSelectedLocalWork((current) => (current?.id === work.id ? works.find((item) => item.id === work.id) || current : current));
+    setMessage('主作品发布状态已更新');
+  }
+
+  async function updateLocalChildStatus(child, publishStatus) {
+    if (!child || child.publishStatus === publishStatus) return;
+    if (localWorksMode === 'scanned') {
+      setLocalWorksList((current) => current.map((work) => ({
+        ...work,
+        children: work.children.map((item) => (
+          item.id === child.id ? { ...item, publishStatus } : item
+        ))
+      })));
+      setSelectedChildWork((current) => (current?.id === child.id ? { ...current, publishStatus } : current));
+      setSelectedLocalWork((current) => current ? {
+        ...current,
+        children: current.children.map((item) => (
+          item.id === child.id ? { ...item, publishStatus } : item
+        ))
+      } : current);
+      return;
+    }
+    const works = await window.mediapolotx.localWorks.updateChildStatus({
+      childId: child.id,
+      publishStatus
+    });
+    setLocalWorksList(works);
+    setSelectedChildWork((current) => (current?.id === child.id ? { ...current, publishStatus } : current));
+    setSelectedLocalWork((current) => {
+      if (!current) return current;
+      return works.find((work) => work.id === current.id) || current;
+    });
+    setMessage('子作品发布状态已更新');
+  }
+
   async function runTask(taskRunner) {
     setBusy(true);
     setMessage('任务执行中...');
@@ -1709,6 +1760,7 @@ function App() {
             onPageChange={setLocalWorkPage}
             onEditTags={openLocalWorkTagEditor}
             onDeleteWork={deleteLocalWork}
+            onStatusChange={updateLocalWorkStatus}
             onOpenMainWork={setSelectedMainWork}
             onOpenPath={openPath}
             onOpenChildren={(work) => {
@@ -2285,6 +2337,7 @@ function App() {
             work={selectedLocalWork}
             selectedChild={selectedChildWork}
             onSelectChild={setSelectedChildWork}
+            onChildStatusChange={updateLocalChildStatus}
             onBack={() => setSelectedChildWork(null)}
             onClose={() => {
               setSelectedLocalWork(null);
@@ -2438,6 +2491,7 @@ function LocalWorksView({
   onPageChange,
   onEditTags,
   onDeleteWork,
+  onStatusChange,
   onOpenMainWork,
   onOpenPath,
   onOpenChildren
@@ -2499,7 +2553,13 @@ function LocalWorksView({
                   '0 个'
                 )}
               </span>
-              <span><em className={`publishStatus ${statusClassName(work.publishStatus)}`}>{work.publishStatus}</em></span>
+              <span>
+                <PublishStatusSelect
+                  value={work.publishStatus}
+                  onChange={(nextStatus) => onStatusChange(work, nextStatus)}
+                  disabled={busy}
+                />
+              </span>
               <span className="rowActions">
                 <button type="button" onClick={() => onOpenPath(workMdPath(work))} disabled={!work.mdFile}>打开MD</button>
                 <button type="button" onClick={() => onOpenPath(work.folderPath || `${worksPath}\\${work.folderName}`)}>打开目录</button>
@@ -2638,7 +2698,24 @@ function ProxyConfigView({ proxies, editingProxy, onEdit, onNew, onSave, onDelet
   );
 }
 
-function LocalWorkChildrenModal({ work, selectedChild, onSelectChild, onBack, onClose }) {
+function PublishStatusSelect({ value, onChange, disabled = false }) {
+  return (
+    <select
+      className={`publishStatusSelect ${statusClassName(value)}`}
+      value={value || '未发布'}
+      disabled={disabled}
+      onClick={(event) => event.stopPropagation()}
+      onMouseDown={(event) => event.stopPropagation()}
+      onChange={(event) => onChange(event.target.value)}
+    >
+      {localWorkPublishStatuses.map((status) => (
+        <option key={status} value={status}>{status}</option>
+      ))}
+    </select>
+  );
+}
+
+function LocalWorkChildrenModal({ work, selectedChild, onSelectChild, onChildStatusChange, onBack, onClose }) {
   return (
     <div className="modalBackdrop">
       <div className="mediaAccountModal localChildrenModal">
@@ -2650,7 +2727,16 @@ function LocalWorkChildrenModal({ work, selectedChild, onSelectChild, onBack, on
           <button className="iconButton" onClick={onClose}>×</button>
         </div>
         {selectedChild ? (
-          <LocalWorkPostPreview item={selectedChild} />
+          <>
+            <div className="modalInlineActions">
+              <span>发布状态</span>
+              <PublishStatusSelect
+                value={selectedChild.publishStatus}
+                onChange={(nextStatus) => onChildStatusChange(selectedChild, nextStatus)}
+              />
+            </div>
+            <LocalWorkPostPreview item={selectedChild} />
+          </>
         ) : (
           <div className="localChildMasonry">
             {work.children.map((child) => (
@@ -2665,7 +2751,10 @@ function LocalWorkChildrenModal({ work, selectedChild, onSelectChild, onBack, on
                   <p>{child.content || `子作品目录：${child.variantName}`}</p>
                   <span>
                     <small>{child.platform}</small>
-                    <em className={`publishStatus ${statusClassName(child.publishStatus)}`}>{child.publishStatus}</em>
+                    <PublishStatusSelect
+                      value={child.publishStatus}
+                      onChange={(nextStatus) => onChildStatusChange(child, nextStatus)}
+                    />
                   </span>
                 </div>
               </button>

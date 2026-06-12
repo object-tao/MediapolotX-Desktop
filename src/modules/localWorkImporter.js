@@ -385,6 +385,32 @@ function updateWorkTags(db, { workId, tags }) {
   return listImportedWorks(db);
 }
 
+function updateWorkPublishStatus(db, { workId, publishStatus }) {
+  db.prepare(`
+    UPDATE local_works
+    SET publish_status = @publishStatus, updated_at = @updatedAt
+    WHERE id = @workId
+  `).run({
+    workId,
+    publishStatus: normalizePublishStatus(publishStatus),
+    updatedAt: nowIso()
+  });
+  return listImportedWorks(db);
+}
+
+function updateChildPublishStatus(db, { childId, publishStatus }) {
+  db.prepare(`
+    UPDATE local_work_children
+    SET publish_status = @publishStatus, updated_at = @updatedAt
+    WHERE id = @childId
+  `).run({
+    childId,
+    publishStatus: normalizePublishStatus(publishStatus),
+    updatedAt: nowIso()
+  });
+  return listImportedWorks(db);
+}
+
 async function deleteImportedWork(db, { workId, targetRoot }) {
   if (!workId) throw new Error('缺少作品 ID');
   if (!targetRoot) throw new Error('请先设置作品路径');
@@ -401,11 +427,18 @@ async function deleteImportedWork(db, { workId, targetRoot }) {
   return listImportedWorks(db);
 }
 
+function normalizePublishStatus(status) {
+  const allowed = new Set(['未发布', '已发布', '部分发布', '发布失败']);
+  return allowed.has(status) ? status : '未发布';
+}
+
 module.exports = {
   scanLocalWorks,
   importScannedWorks,
   listImportedWorks,
   organizeImportedWorks,
   updateWorkTags,
+  updateWorkPublishStatus,
+  updateChildPublishStatus,
   deleteImportedWork
 };
