@@ -1369,13 +1369,20 @@ function App() {
     setMessage('子作品发布状态已更新');
   }
 
-  function openCopywriterModal(work) {
+  async function openCopywriterModal(work) {
     const defaultModelId = aiStore.defaultTextModelId || aiTextModels[0]?.id || '';
+    let promptTemplate = '';
+    try {
+      promptTemplate = await window.mediapolotx.localWorks.getCopyPromptTemplate({ workId: work.id });
+    } catch (error) {
+      setMessage(`加载默认提示词失败：${cleanRemoteError(error)}`);
+    }
     setCopywriterModal({
       work,
       modelId: defaultModelId,
       temperature: '0.75',
-      maxTokens: String(Math.max(4096, ((work.children?.length || 0) + 1) * 700))
+      maxTokens: String(Math.max(4096, ((work.children?.length || 0) + 1) * 700)),
+      promptTemplate
     });
     setCopywriterProgress(null);
   }
@@ -1399,7 +1406,8 @@ function App() {
         workId: copywriterModal.work.id,
         modelId: copywriterModal.modelId,
         temperature: copywriterModal.temperature,
-        maxTokens: copywriterModal.maxTokens
+        maxTokens: copywriterModal.maxTokens,
+        promptTemplate: copywriterModal.promptTemplate
       });
       setLocalWorksList(result.works);
       const updatedWork = result.works.find((work) => work.id === copywriterModal.work.id);
@@ -2712,6 +2720,15 @@ function LocalWorkCopywriterModal({ value, models, busy, progress, onChange, onG
           <div className="toolIntro">
             <p>生成后会覆盖主作品和子作品的标题与正文；标题限制 20 个中文字符以内，正文限制 1000 字以内。</p>
           </div>
+          <label>
+            提交给 AI 的提示词
+            <textarea
+              className="largeTextarea copyPromptTextarea"
+              value={value.promptTemplate || ''}
+              onChange={(event) => onChange({ ...value, promptTemplate: event.target.value })}
+              disabled={busy}
+            />
+          </label>
           {progress && (
             <div className="copyProgress">
               <div>

@@ -270,14 +270,30 @@ try {
     updatedAt: now
   });
   const localWork = localWorkImporter.listImportedWorks(db).find((work) => work.id === localWorkId);
-  const generatedCopy = await localWorkCopywriter.generateLocalWorkCopy(localWork, { modelId: qwenWithStaleResource.id }, async () => ({
-    modelId: qwenWithStaleResource.id,
-    modelName: 'Smoke Qwen',
-    content: JSON.stringify({
-      main: { title: '海关公告解读', content: '这是一段可发布的小红书正文。' },
-      variants: [{ title: '申报重点提醒', content: '这是另一段差异化子作品正文。' }]
-    })
-  }));
+  const promptTemplate = localWorkCopywriter.buildPromptTemplate({
+    titleLimit: 20,
+    contentLimit: 1000,
+    childCount: localWork.children.length,
+    children: localWork.children,
+    sourceTitle: localWork.title
+  });
+  const generatedCopy = await localWorkCopywriter.generateLocalWorkCopy(
+    localWork,
+    { modelId: qwenWithStaleResource.id, promptTemplate: `${promptTemplate}\n自定义测试提示词。` },
+    async (options) => {
+      if (!options.messages[1].content.includes('自定义测试提示词。')) {
+        throw new Error('Local work copywriter prompt template smoke test failed.');
+      }
+      return {
+        modelId: qwenWithStaleResource.id,
+        modelName: 'Smoke Qwen',
+        content: JSON.stringify({
+          main: { title: '海关公告解读', content: '这是一段可发布的小红书正文。' },
+          variants: [{ title: '申报重点提醒', content: '这是另一段差异化子作品正文。' }]
+        })
+      };
+    }
+  );
   const updatedLocalWorks = localWorkImporter.updateWorkCopy(db, generatedCopy);
   const updatedLocalWork = updatedLocalWorks.find((work) => work.id === localWorkId);
   if (

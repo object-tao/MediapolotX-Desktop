@@ -150,6 +150,23 @@ function registerIpc() {
     localWorkImporter.deleteImportedWork(db, payload)
   ));
 
+  ipcMain.handle('localWorks:getCopyPromptTemplate', (_event, payload) => {
+    const works = localWorkImporter.listImportedWorks(db);
+    const work = works.find((item) => item.id === payload.workId);
+    if (!work) throw new Error('作品不存在');
+    const children = Array.isArray(work.children) ? work.children : [];
+    return localWorkCopywriter.buildPromptTemplate({
+      titleLimit: 20,
+      contentLimit: 1000,
+      childCount: children.length,
+      children: children.map((child, index) => ({
+        id: child.id,
+        variantName: child.variantName || `子作品${index + 1}`
+      })),
+      sourceTitle: work.title
+    });
+  });
+
   ipcMain.handle('localWorks:generateCopy', async (event, payload) => {
     const works = localWorkImporter.listImportedWorks(db);
     const work = works.find((item) => item.id === payload.workId);

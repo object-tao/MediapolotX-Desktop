@@ -881,6 +881,17 @@ textarea {
   max-width: 640px;
 }
 
+.copywriterModal .modalSection {
+  max-height: 62vh;
+  overflow: auto;
+}
+
+.copyPromptTextarea {
+  min-height: 260px;
+  font-family: Consolas, "Microsoft YaHei", monospace;
+  line-height: 1.55;
+}
+
 .copyProgress {
   display: grid;
   gap: 8px;
