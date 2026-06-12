@@ -2685,6 +2685,7 @@ function LocalWorksView({
 
 function LocalWorkCopywriterModal({ value, models, busy, progress, onChange, onGenerate, onClose }) {
   const work = value.work;
+  const selectedModel = models.find((model) => model.id === value.modelId);
   const totalItems = (work.children?.length || 0) + 1;
   const percent = progress?.total ? Math.round((Number(progress.current || 0) / Number(progress.total || 1)) * 100) : 0;
   return (
@@ -2706,6 +2707,11 @@ function LocalWorkCopywriterModal({ value, models, busy, progress, onChange, onG
                 <option key={model.id} value={model.id}>{model.name} / {model.model}</option>
               ))}
             </select>
+            {selectedModel && (
+              <small className={selectedModel.hasApiKey ? 'mutedText' : 'dangerText'}>
+                {selectedModel.hasApiKey ? '将使用该模型已保存的 API Key' : '该模型没有已保存的 API Key，请先到 AI 模型配置保存'}
+              </small>
+            )}
           </label>
           <div className="splitInputs">
             <label>
@@ -2741,7 +2747,7 @@ function LocalWorkCopywriterModal({ value, models, busy, progress, onChange, onG
         </div>
         <div className="modalActions">
           <button type="button" className="secondaryButton" onClick={onClose} disabled={busy}>取消</button>
-          <button type="button" onClick={onGenerate} disabled={busy || !value.modelId || models.length === 0}>开始生成</button>
+          <button type="button" onClick={onGenerate} disabled={busy || !value.modelId || !selectedModel?.hasApiKey || models.length === 0}>开始生成</button>
         </div>
       </div>
     </div>

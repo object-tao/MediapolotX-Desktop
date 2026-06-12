@@ -77,19 +77,18 @@ function createAiConfigManager(settingsManager, safeStorage) {
     const provider = getProviderDefaults(normalized.provider);
     const apiKey = normalized.apiKey || decryptApiKey(normalized.encryptedApiKey || existing?.encryptedApiKey);
     if (provider.auth !== 'optional' && !apiKey) throw new Error('API Key 不能为空');
-    const headers = createRequestHeaders(provider, apiKey);
 
     const modelName = getRequestModelName(normalized);
     if (!modelName) throw new Error('模型 ID 不能为空');
     try {
       const response = usesResponsesApi(normalized)
-        ? await postResponsesRequest(normalized, headers, [{ role: 'user', content: 'ping' }], { maxTokens: 32, temperature: 0, timeout: 20000 })
+        ? await postResponsesRequestWithAuthRetry(normalized, provider, apiKey, [{ role: 'user', content: 'ping' }], { maxTokens: 32, temperature: 0, timeout: 20000 })
         : await axios.post(buildChatCompletionsUrl(normalized.baseUrl), {
           model: modelName,
           messages: [{ role: 'user', content: 'ping' }],
           max_tokens: 8,
           temperature: 0
-        }, { timeout: 20000, headers });
+        }, { timeout: 20000, headers: createRequestHeaders(provider, apiKey) });
       return {
         ok: true,
         message: `连接成功，模型返回：${extractResponseText(response.data) || response.data?.choices?.[0]?.message?.content || response.data?.id || 'ok'}`
@@ -106,11 +105,10 @@ function createAiConfigManager(settingsManager, safeStorage) {
     const provider = getProviderDefaults(model.provider);
     const apiKey = decryptApiKey(model.encryptedApiKey);
     if (provider.auth !== 'optional' && !apiKey) throw new Error('默认文本模型缺少 API Key');
-    const headers = createRequestHeaders(provider, apiKey);
 
     try {
       if (usesResponsesApi(model)) {
-        const response = await postResponsesRequest(model, headers, options.messages, {
+        const response = await postResponsesRequestWithAuthRetry(model, provider, apiKey, options.messages, {
           temperature: Number(options.temperature ?? model.temperature ?? 0.5),
           maxTokens: Number(options.maxTokens ?? model.maxTokens ?? 4096),
           timeout: Number(options.timeout ?? 120000)
@@ -126,7 +124,7 @@ function createAiConfigManager(settingsManager, safeStorage) {
         messages: options.messages,
         temperature: Number(options.temperature ?? model.temperature ?? 0.5),
         max_tokens: Number(options.maxTokens ?? model.maxTokens ?? 4096)
-      }, { timeout: Number(options.timeout ?? 120000), headers });
+      }, { timeout: Number(options.timeout ?? 120000), headers: createRequestHeaders(provider, apiKey) });
       return {
         modelId: model.id,
         modelName: model.name,
@@ -290,6 +288,21 @@ function createRequestHeaders(provider, apiKey) {
   return headers;
 }
 
+async function postResponsesRequestWithAuthRetry(model, provider, apiKey, messages, options = {}) {
+  const headers = createRequestHeaders(provider, apiKey);
+  try {
+    return await postResponsesRequest(model, headers, messages, options);
+  } catch (error) {
+    if (model.provider !== 'doubao' || error.response?.status !== 401 || !apiKey || /^Bearer\s+/i.test(apiKey)) {
+      throw error;
+    }
+    return postResponsesRequest(model, {
+      ...headers,
+      Authorization: `Bearer ${apiKey}`
+    }, messages, options);
+  }
+}
+
 function messagesToResponsesInput(messages = []) {
   return messages.map((message) => ({
     role: message.role || 'user',
@@ -346,7 +359,12 @@ function formatTestError(error, model) {
     return `接口返回 404：${hint}`;
   }
   if (status === 401 || status === 403) {
-    return `鉴权失败 ${status}：请检查 API Key 是否正确、是否有该模型权限。`;
+    return [
+      `鉴权失败 ${status}：请检查 API Key 是否正确、是否有该模型权限。`,
+      `当前模型：${model.name || model.provider} / ${model.model}`,
+      remoteMessage ? `接口返回：${remoteMessage}` : '',
+      '如果刚刚在 AI 模型配置里测试成功，请确认已经点击“保存模型”，生成文案只会使用已保存的 Key。'
+    ].filter(Boolean).join('\n');
   }
   if (status) {
     return `接口返回 ${status}：${remoteMessage}`;

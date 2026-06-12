@@ -867,6 +867,14 @@ textarea {
   font-size: 12px;
 }
 
+.mutedText {
+  color: #64748b;
+}
+
+.dangerText {
+  color: #b42318;
+}
+
 .rowActions {
   display: flex;
   gap: 8px;
