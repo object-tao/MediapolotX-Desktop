@@ -6,7 +6,7 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $sourcePath = Join-Path $repoRoot "release\win-unpacked"
-$userDataPath = Join-Path $env:APPDATA "mediapolotx-desktop"
+$businessDataPath = Join-Path $InstallPath "data"
 
 Set-Location $repoRoot
 
@@ -37,6 +37,7 @@ Get-CimInstance Win32_Process |
   ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 
 New-Item -ItemType Directory -Force -Path $InstallPath | Out-Null
+New-Item -ItemType Directory -Force -Path $businessDataPath | Out-Null
 
 Write-Host "Copying program files to $InstallPath"
 robocopy $sourcePath $InstallPath /E /COPY:DAT /R:2 /W:1 /NFL /NDL /NP
@@ -45,4 +46,4 @@ if ($LASTEXITCODE -gt 7) {
 }
 
 Write-Host "Update completed."
-Write-Host "Business data was not modified: $userDataPath"
+Write-Host "Business data was not modified: $businessDataPath"

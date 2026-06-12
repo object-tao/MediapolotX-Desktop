@@ -54,7 +54,7 @@ function createWindow() {
 }
 
 async function bootstrapServices() {
-  const userData = app.getPath('userData') || config.userDataFallback;
+  const userData = getBusinessDataPath();
   logger = createLogger(path.join(userData, 'logs'));
   db = await createDatabase(path.join(userData, 'mediapolotx.sqlite'));
   storageManager = createStorageManager(db);
@@ -69,7 +69,7 @@ function registerIpc() {
   ipcMain.handle('app:getStatus', () => ({
     name: config.appName,
     version: app.getVersion(),
-    userDataPath: app.getPath('userData')
+    userDataPath: getBusinessDataPath()
   }));
 
   ipcMain.handle('dialog:selectDirectory', async () => {
@@ -347,6 +347,13 @@ function registerIpc() {
     }
     return { count: results.length, results };
   });
+}
+
+function getBusinessDataPath() {
+  if (app.isPackaged) {
+    return path.join(path.dirname(process.execPath), 'data');
+  }
+  return app.getPath('userData') || config.userDataFallback;
 }
 
 function registerLocalResourceProtocol() {
