@@ -83,12 +83,12 @@ function createAiConfigManager(settingsManager, safeStorage) {
     try {
       const response = usesResponsesApi(normalized)
         ? await postResponsesRequestWithAuthRetry(normalized, provider, apiKey, [{ role: 'user', content: 'ping' }], { maxTokens: 32, temperature: 0, timeout: 20000 })
-        : await axios.post(buildChatCompletionsUrl(normalized.baseUrl), {
+        : await withNetworkRetry(() => axios.post(buildChatCompletionsUrl(normalized.baseUrl), {
           model: modelName,
           messages: [{ role: 'user', content: 'ping' }],
           max_tokens: 8,
           temperature: 0
-        }, { timeout: 20000, headers: createRequestHeaders(provider, apiKey) });
+        }, { timeout: 20000, headers: createRequestHeaders(provider, apiKey) }));
       return {
         ok: true,
         message: `连接成功，模型返回：${extractResponseText(response.data) || response.data?.choices?.[0]?.message?.content || response.data?.id || 'ok'}`
@@ -119,12 +119,12 @@ function createAiConfigManager(settingsManager, safeStorage) {
           content: extractResponseText(response.data)
         };
       }
-      const response = await axios.post(buildChatCompletionsUrl(model.baseUrl), {
+      const response = await withNetworkRetry(() => axios.post(buildChatCompletionsUrl(model.baseUrl), {
         model: getRequestModelName(model),
         messages: options.messages,
         temperature: Number(options.temperature ?? model.temperature ?? 0.5),
         max_tokens: Number(options.maxTokens ?? model.maxTokens ?? 4096)
-      }, { timeout: Number(options.timeout ?? 120000), headers: createRequestHeaders(provider, apiKey) });
+      }, { timeout: Number(options.timeout ?? 120000), headers: createRequestHeaders(provider, apiKey) }));
       return {
         modelId: model.id,
         modelName: model.name,
@@ -320,7 +320,7 @@ function postResponsesRequest(model, headers, messages, options = {}) {
     max_output_tokens: Number(options.maxTokens ?? model.maxTokens ?? 4096)
   };
   if (model.provider === 'qwen') body.enable_thinking = true;
-  return axios.post(`${trimTrailingSlash(model.baseUrl)}/responses`, body, { timeout: Number(options.timeout ?? 120000), headers });
+  return withNetworkRetry(() => axios.post(`${trimTrailingSlash(model.baseUrl)}/responses`, body, { timeout: Number(options.timeout ?? 120000), headers }));
 }
 
 function extractResponseText(data) {
@@ -336,6 +336,30 @@ function extractResponseText(data) {
     )).map((content) => content.text || '').filter(Boolean).join('\n');
   }
   return '';
+}
+
+async function withNetworkRetry(request, retries = 2) {
+  let lastError;
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      return await request();
+    } catch (error) {
+      lastError = error;
+      if (!isRetryableNetworkError(error) || attempt >= retries) break;
+      await delay(1200 * (attempt + 1));
+    }
+  }
+  throw lastError;
+}
+
+function isRetryableNetworkError(error) {
+  const code = error?.code;
+  return ['ETIMEDOUT', 'ECONNRESET', 'ECONNABORTED', 'EAI_AGAIN', 'ENOTFOUND'].includes(code)
+    || /timeout|timed out|socket hang up/i.test(error?.message || '');
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function trimTrailingSlash(value) {
@@ -369,7 +393,20 @@ function formatTestError(error, model) {
   if (status) {
     return `接口返回 ${status}：${remoteMessage}`;
   }
-  return `连接失败：${remoteMessage}`;
+  return `连接失败：${formatNetworkErrorMessage(error, remoteMessage)}`;
+}
+
+function formatNetworkErrorMessage(error, remoteMessage) {
+  const message = String(remoteMessage || error.message || '');
+  const address = error.address || message.match(/\b\d{1,3}(?:\.\d{1,3}){3}\b/)?.[0] || '';
+  const code = error.code ? `${error.code}：` : '';
+  const proxyHint = /^198\.18\./.test(address)
+    ? '；当前连接到了 198.18.x.x 代理/TUN 映射地址，请检查本机代理是否已启动、规则是否允许该 AI 域名访问，或切换代理为全局/直连后重试'
+    : '';
+  const timeoutHint = /timed?out|ETIMEDOUT|ECONNABORTED/i.test(`${error.code || ''} ${message}`)
+    ? '；请求已自动重试仍超时'
+    : '';
+  return `${code}${message}${timeoutHint}${proxyHint}`;
 }
 
 module.exports = {
