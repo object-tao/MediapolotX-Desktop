@@ -795,7 +795,7 @@ textarea {
 
 .localWorkRow {
   display: grid;
-  grid-template-columns: 64px 76px minmax(160px, 1fr) minmax(160px, 0.8fr) minmax(220px, 1.2fr) 110px 110px minmax(150px, auto);
+  grid-template-columns: 64px 76px minmax(220px, 1.4fr) minmax(220px, 1fr) 110px 110px minmax(150px, auto);
   gap: 12px;
   align-items: center;
   padding: 11px 12px;

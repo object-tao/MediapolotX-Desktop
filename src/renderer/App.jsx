@@ -2330,7 +2330,6 @@ function LocalWorksView({
             <span>图片数</span>
             <span>标题</span>
             <span>标签</span>
-            <span>MD文件</span>
             <span>子作品数量</span>
             <span>发布状态</span>
             <span>操作</span>
@@ -2348,7 +2347,6 @@ function LocalWorksView({
                 {(work.tags || []).length > 0 ? (work.tags || []).map((tag) => <small key={tag}>{tag}</small>) : <small>未设置</small>}
                 <button type="button" className="linkButton" onClick={() => onEditTags(work)}>编辑</button>
               </span>
-              <span title={workMdPath(work)}>{workMdPath(work)}</span>
               <span>
                 {work.children.length > 0 ? (
                   <button type="button" className="linkButton" onClick={() => onOpenChildren(work)}>
