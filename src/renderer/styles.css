@@ -795,7 +795,7 @@ textarea {
 
 .localWorkRow {
   display: grid;
-  grid-template-columns: 64px minmax(180px, 1.1fr) minmax(220px, 1.3fr) 110px 110px minmax(150px, auto);
+  grid-template-columns: 64px 76px minmax(180px, 1.1fr) minmax(220px, 1.3fr) 110px 110px minmax(150px, auto);
   gap: 12px;
   align-items: center;
   padding: 11px 12px;
@@ -826,6 +826,14 @@ textarea {
   color: #2b7a78;
   background: transparent;
   font-weight: 700;
+}
+
+.titleLink {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
 }
 
 .rowActions {

@@ -299,6 +299,7 @@ function App() {
   const [workPathDraft, setWorkPathDraft] = useState('');
   const [selectedLocalWork, setSelectedLocalWork] = useState(null);
   const [selectedChildWork, setSelectedChildWork] = useState(null);
+  const [selectedMainWork, setSelectedMainWork] = useState(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -1094,6 +1095,7 @@ function App() {
       setLocalWorksMode('scanned');
       setSelectedLocalWork(null);
       setSelectedChildWork(null);
+      setSelectedMainWork(null);
       setMessage(`扫描完成：${result.works.length} 个主作品`);
     } catch (error) {
       setMessage(`扫描失败：${error.message}`);
@@ -1123,6 +1125,7 @@ function App() {
       setLocalWorksMode('imported');
       setSelectedLocalWork(null);
       setSelectedChildWork(null);
+      setSelectedMainWork(null);
       setMessage(`导入完成：${result.importedCount} 个主作品`);
     } catch (error) {
       setMessage(`导入失败：${error.message}`);
@@ -1499,6 +1502,7 @@ function App() {
             onSetPath={openWorkPathModal}
             onImportDirectory={importLocalWorksDirectory}
             onConfirmImport={confirmImportLocalWorks}
+            onOpenMainWork={setSelectedMainWork}
             onOpenPath={openPath}
             onOpenChildren={(work) => {
               setSelectedLocalWork(work);
@@ -2080,6 +2084,14 @@ function App() {
             }}
           />
         )}
+        {selectedMainWork && (
+          <LocalWorkPreviewModal
+            title={selectedMainWork.title}
+            subtitle={`主作品 · ${selectedMainWork.publishStatus}`}
+            item={mainWorkPreviewItem(selectedMainWork)}
+            onClose={() => setSelectedMainWork(null)}
+          />
+        )}
         {selectedPrompt && (
           <PromptDetailModal
             prompt={selectedPrompt}
@@ -2203,6 +2215,7 @@ function LocalWorksView({
   onSetPath,
   onImportDirectory,
   onConfirmImport,
+  onOpenMainWork,
   onOpenPath,
   onOpenChildren
 }) {
@@ -2234,6 +2247,7 @@ function LocalWorksView({
         <div className="localWorkTable">
           <div className="localWorkRow head">
             <span>序号</span>
+            <span>图片数</span>
             <span>标题</span>
             <span>MD文件</span>
             <span>子作品数量</span>
@@ -2243,7 +2257,12 @@ function LocalWorksView({
           {works.map((work) => (
             <div className="localWorkRow" key={work.id}>
               <span>{work.serialNo}</span>
-              <span title={work.title}>{work.title}</span>
+              <span>{work.imagePaths?.length || 0} 张</span>
+              <span title={work.title}>
+                <button type="button" className="linkButton titleLink" onClick={() => onOpenMainWork(work)}>
+                  {work.title}
+                </button>
+              </span>
               <span title={workMdPath(work)}>{workMdPath(work)}</span>
               <span>
                 {work.children.length > 0 ? (
@@ -2310,30 +2329,7 @@ function LocalWorkChildrenModal({ work, selectedChild, onSelectChild, onBack, on
           <button className="iconButton" onClick={onClose}>×</button>
         </div>
         {selectedChild ? (
-          <div className="xhsPreview">
-            <div className="xhsImageStrip">
-              {selectedChild.imagePaths.length > 0 ? (
-                selectedChild.imagePaths.map((imagePath, index) => (
-                  <img key={`${imagePath}-${index}`} src={imagePath} alt={`${selectedChild.title} ${index + 1}`} />
-                ))
-              ) : (
-                <div className="imagePlaceholder">暂无图片</div>
-              )}
-            </div>
-            <article className="xhsPostBody">
-              <div className="promptTagList">
-                <small>{selectedChild.platform}</small>
-                <small className={statusClassName(selectedChild.publishStatus)}>{selectedChild.publishStatus}</small>
-              </div>
-              <h3>{selectedChild.title}</h3>
-              <p>{selectedChild.content || '暂无正文内容'}</p>
-              <div className="promptTagList">
-                {selectedChild.tags.map((tag) => (
-                  <small key={tag}>#{tag}</small>
-                ))}
-              </div>
-            </article>
-          </div>
+          <LocalWorkPostPreview item={selectedChild} />
         ) : (
           <div className="localChildMasonry">
             {work.children.map((child) => (
@@ -2360,6 +2356,55 @@ function LocalWorkChildrenModal({ work, selectedChild, onSelectChild, onBack, on
           <button type="button" onClick={onClose}>关闭</button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function LocalWorkPreviewModal({ title, subtitle, item, onClose }) {
+  return (
+    <div className="modalBackdrop">
+      <div className="mediaAccountModal localChildrenModal">
+        <div className="modalHeader">
+          <div>
+            <h2>{title}</h2>
+            <p>{subtitle}</p>
+          </div>
+          <button className="iconButton" onClick={onClose}>×</button>
+        </div>
+        <LocalWorkPostPreview item={item} />
+        <div className="modalActions">
+          <button type="button" onClick={onClose}>关闭</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LocalWorkPostPreview({ item }) {
+  return (
+    <div className="xhsPreview">
+      <div className="xhsImageStrip">
+        {item.imagePaths.length > 0 ? (
+          item.imagePaths.map((imagePath, index) => (
+            <img key={`${imagePath}-${index}`} src={imagePath} alt={`${item.title} ${index + 1}`} />
+          ))
+        ) : (
+          <div className="imagePlaceholder">暂无图片</div>
+        )}
+      </div>
+      <article className="xhsPostBody">
+        <div className="promptTagList">
+          <small>{item.platform}</small>
+          <small className={statusClassName(item.publishStatus)}>{item.publishStatus}</small>
+        </div>
+        <h3>{item.title}</h3>
+        <p>{item.content || '暂无正文内容'}</p>
+        <div className="promptTagList">
+          {item.tags.map((tag) => (
+            <small key={tag}>#{tag}</small>
+          ))}
+        </div>
+      </article>
     </div>
   );
 }
@@ -2792,6 +2837,18 @@ function statusClassName(status) {
   if (status === '部分发布') return 'partial';
   if (status === '发布失败') return 'failed';
   return 'draft';
+}
+
+function mainWorkPreviewItem(work) {
+  return {
+    id: work.id,
+    platform: '主作品',
+    title: work.title,
+    content: '',
+    tags: [],
+    publishStatus: work.publishStatus,
+    imagePaths: work.imagePaths || []
+  };
 }
 
 function formatBytes(bytes) {
