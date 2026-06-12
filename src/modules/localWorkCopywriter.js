@@ -1,5 +1,7 @@
 const fs = require('node:fs/promises');
 
+const CHILD_BATCH_SIZE = 6;
+
 async function generateLocalWorkCopy(work, options, generateText, onProgress = () => {}) {
   if (!work?.id) throw new Error('缺少作品信息');
   if (!work.mdFile) throw new Error('当前作品没有 MD 文件，无法生成文案');
@@ -22,31 +24,59 @@ async function generateLocalWorkCopy(work, options, generateText, onProgress = (
   };
   const promptTemplate = options.promptTemplate || buildPromptTemplate(payload);
 
-  onProgress({ stage: 'requesting', current: 0, total: children.length + 1, label: '正在调用 AI 生成主作品和子作品文案' });
-  const response = await generateText({
+  onProgress({ stage: 'requesting', current: 0, total: children.length + 1, label: '正在调用 AI 生成主作品文案' });
+  const mainResponse = await generateText({
     modelId: options.modelId,
-    messages: buildMessages(payload, promptTemplate),
+    messages: buildMessages(payload, buildMainOnlyPrompt(promptTemplate)),
     temperature: Number(options.temperature ?? 0.75),
-    maxTokens: Number(options.maxTokens ?? Math.max(4096, (children.length + 1) * 700))
+    maxTokens: Math.min(Number(options.maxTokens ?? 4096), 4096),
+    timeout: Number(options.timeout ?? 600000)
   });
 
-  onProgress({ stage: 'parsing', current: 1, total: children.length + 1, label: '正在解析 AI 返回内容' });
-  const parsed = parseGeneratedCopy(response.content);
-  const main = normalizeCopyItem(parsed.main, work.title);
-  const variants = Array.isArray(parsed.variants) ? parsed.variants : [];
-  const generatedChildren = children.map((child, index) => {
-    const variant = variants[index] || {};
-    onProgress({
-      stage: 'mapping',
-      current: index + 2,
-      total: children.length + 1,
-      label: `正在整理子作品 ${index + 1}/${children.length}`
-    });
-    return {
-      id: child.id,
-      ...normalizeCopyItem(variant, main.title)
+  onProgress({ stage: 'parsing', current: 1, total: children.length + 1, label: '正在解析主作品文案' });
+  const mainParsed = parseGeneratedCopy(mainResponse.content);
+  const main = normalizeCopyItem(mainParsed.main, work.title);
+  const generatedChildren = [];
+
+  for (const [batchIndex, batchChildren] of chunkArray(children, CHILD_BATCH_SIZE).entries()) {
+    const batchStart = batchIndex * CHILD_BATCH_SIZE;
+    const batchPayload = {
+      ...payload,
+      childCount: batchChildren.length,
+      children: batchChildren.map((child, index) => ({
+        id: child.id,
+        variantName: child.variantName || `子作品${batchStart + index + 1}`
+      }))
     };
-  });
+    onProgress({
+      stage: 'requesting',
+      current: batchStart + 1,
+      total: children.length + 1,
+      label: `正在生成子作品 ${batchStart + 1}-${Math.min(batchStart + batchChildren.length, children.length)}/${children.length}`
+    });
+    const batchResponse = await generateText({
+      modelId: options.modelId,
+      messages: buildMessages(batchPayload, buildChildBatchPrompt(promptTemplate, batchPayload)),
+      temperature: Number(options.temperature ?? 0.75),
+      maxTokens: Math.min(Number(options.maxTokens ?? Math.max(4096, batchChildren.length * 900)), Math.max(4096, batchChildren.length * 1200)),
+      timeout: Number(options.timeout ?? 600000)
+    });
+    const parsedBatch = parseGeneratedCopy(batchResponse.content);
+    const variants = Array.isArray(parsedBatch.variants) ? parsedBatch.variants : [];
+    batchChildren.forEach((child, index) => {
+      const variant = variants[index] || {};
+      generatedChildren.push({
+        id: child.id,
+        ...normalizeCopyItem(variant, main.title)
+      });
+      onProgress({
+        stage: 'mapping',
+        current: batchStart + index + 2,
+        total: children.length + 1,
+        label: `正在整理子作品 ${batchStart + index + 1}/${children.length}`
+      });
+    });
+  }
 
   onProgress({ stage: 'done', current: children.length + 1, total: children.length + 1, label: '文案生成完成' });
   return {
@@ -54,8 +84,8 @@ async function generateLocalWorkCopy(work, options, generateText, onProgress = (
     title: main.title,
     content: main.content,
     children: generatedChildren,
-    modelId: response.modelId,
-    modelName: response.modelName
+    modelId: mainResponse.modelId,
+    modelName: mainResponse.modelName
   };
 }
 
@@ -111,6 +141,27 @@ function buildPromptTemplate(payload) {
   ].join('\n');
 }
 
+function buildMainOnlyPrompt(promptTemplate) {
+  return [
+    promptTemplate.trim(),
+    '',
+    '本次任务：只生成主作品 main。',
+    '要求 variants 返回空数组 []，不要生成子作品文案。'
+  ].join('\n');
+}
+
+function buildChildBatchPrompt(promptTemplate, payload) {
+  return [
+    promptTemplate.trim(),
+    '',
+    '本次任务：只生成当前这一批子作品 variants。',
+    '要求 main 可以返回空对象 {}，不要重新生成主作品正文。',
+    `本批子作品数量：${payload.childCount}`,
+    `本批子作品目录标识：${payload.children.map((child) => child.variantName).join('、') || '无'}`,
+    `variants 数量必须等于本批子作品数量：${payload.childCount}`
+  ].join('\n');
+}
+
 function parseGeneratedCopy(content) {
   const text = String(content || '').trim();
   if (!text) throw new Error('AI 未返回文案内容');
@@ -158,6 +209,14 @@ function normalizeSourceText(markdown) {
     .replace(/\n{3,}/g, '\n\n')
     .trim()
     .slice(0, 16000);
+}
+
+function chunkArray(items, size) {
+  const chunks = [];
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+  return chunks;
 }
 
 module.exports = {
