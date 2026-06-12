@@ -1512,6 +1512,27 @@ function App() {
     }
   }
 
+  async function updateSpeechSpeakerCount(nextSpeakerCount) {
+    if (!speechwriterModal?.work) return;
+    setSpeechwriterModal((current) => current ? {
+      ...current,
+      speakerCount: nextSpeakerCount
+    } : current);
+    try {
+      const promptTemplate = await window.mediapolotx.localWorks.getSpeechPromptTemplate({
+        workId: speechwriterModal.work.id,
+        speakerCount: nextSpeakerCount
+      });
+      setSpeechwriterModal((current) => current ? {
+        ...current,
+        speakerCount: nextSpeakerCount,
+        promptTemplate
+      } : current);
+    } catch (error) {
+      setMessage(`更新口播提示词失败：${cleanRemoteError(error)}`);
+    }
+  }
+
   async function runTask(taskRunner) {
     setBusy(true);
     setMessage('任务执行中...');
@@ -2552,6 +2573,7 @@ function App() {
             busy={busy}
             progress={speechwriterProgress}
             onChange={setSpeechwriterModal}
+            onSpeakerCountChange={updateSpeechSpeakerCount}
             onGenerate={generateLocalWorkSpeech}
             onClose={() => {
               if (!busy) {
@@ -3080,7 +3102,7 @@ function PublishStatusSelect({ value, onChange, disabled = false }) {
   );
 }
 
-function LocalWorkSpeechwriterModal({ value, models, busy, progress, onChange, onGenerate, onClose }) {
+function LocalWorkSpeechwriterModal({ value, models, busy, progress, onChange, onSpeakerCountChange, onGenerate, onClose }) {
   const work = value.work;
   const selectedModel = models.find((model) => model.id === value.modelId);
   const percent = progress?.total ? Math.round((Number(progress.current || 0) / Number(progress.total || 1)) * 100) : 0;
@@ -3120,7 +3142,7 @@ function LocalWorkSpeechwriterModal({ value, models, busy, progress, onChange, o
             </label>
             <label>
               人物数
-              <select value={value.speakerCount} onChange={(event) => onChange({ ...value, speakerCount: event.target.value })} disabled={busy}>
+              <select value={value.speakerCount} onChange={(event) => onSpeakerCountChange(event.target.value)} disabled={busy}>
                 <option value="1">1 人</option>
                 <option value="2">2 人 A/B</option>
                 <option value="3">3 人 A/B/C</option>
