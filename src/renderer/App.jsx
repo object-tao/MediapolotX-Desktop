@@ -294,6 +294,7 @@ function App() {
   const [localWorksPath, setLocalWorksPath] = useState(() => localStorage.getItem('mediapolotx.localWorksPath') || '');
   const [localWorksList, setLocalWorksList] = useState([]);
   const [localWorksImportPath, setLocalWorksImportPath] = useState('');
+  const [localWorksMode, setLocalWorksMode] = useState('imported');
   const [workPathModalOpen, setWorkPathModalOpen] = useState(false);
   const [workPathDraft, setWorkPathDraft] = useState('');
   const [selectedLocalWork, setSelectedLocalWork] = useState(null);
@@ -404,6 +405,10 @@ function App() {
     refreshStorages();
     refreshTasks();
     refreshSocialAccounts();
+    window.mediapolotx.localWorks.listImported().then((works) => {
+      setLocalWorksList(works);
+      setLocalWorksMode('imported');
+    });
 
     const off = window.mediapolotx.scanner.onEvent((event) => {
       setMessage(`监听事件：${event.type}`);
@@ -1035,11 +1040,41 @@ function App() {
       const result = await window.mediapolotx.localWorks.scanImportDirectory(folderPath);
       setLocalWorksImportPath(result.rootPath);
       setLocalWorksList(result.works);
+      setLocalWorksMode('scanned');
       setSelectedLocalWork(null);
       setSelectedChildWork(null);
       setMessage(`扫描完成：${result.works.length} 个主作品`);
     } catch (error) {
       setMessage(`扫描失败：${error.message}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirmImportLocalWorks() {
+    if (!localWorksImportPath) {
+      setMessage('请先选择目录导入并完成扫描');
+      return;
+    }
+    if (!localWorksPath) {
+      setMessage('请先设置作品路径');
+      openWorkPathModal();
+      return;
+    }
+    try {
+      setBusy(true);
+      setMessage('正在导入本地作品...');
+      const result = await window.mediapolotx.localWorks.importScannedWorks({
+        sourceRoot: localWorksImportPath,
+        targetRoot: localWorksPath
+      });
+      setLocalWorksList(result.works);
+      setLocalWorksMode('imported');
+      setSelectedLocalWork(null);
+      setSelectedChildWork(null);
+      setMessage(`导入完成：${result.importedCount} 个主作品`);
+    } catch (error) {
+      setMessage(`导入失败：${error.message}`);
     } finally {
       setBusy(false);
     }
@@ -1408,9 +1443,11 @@ function App() {
             works={localWorksList}
             worksPath={localWorksPath}
             importPath={localWorksImportPath}
+            mode={localWorksMode}
             busy={busy}
             onSetPath={openWorkPathModal}
             onImportDirectory={importLocalWorksDirectory}
+            onConfirmImport={confirmImportLocalWorks}
             onOpenPath={openPath}
             onOpenChildren={(work) => {
               setSelectedLocalWork(work);
@@ -2106,7 +2143,18 @@ function PromptLibraryView({
   );
 }
 
-function LocalWorksView({ works, worksPath, importPath, busy, onSetPath, onImportDirectory, onOpenPath, onOpenChildren }) {
+function LocalWorksView({
+  works,
+  worksPath,
+  importPath,
+  mode,
+  busy,
+  onSetPath,
+  onImportDirectory,
+  onConfirmImport,
+  onOpenPath,
+  onOpenChildren
+}) {
   function workMdPath(work) {
     if (!work.mdFile) return '未找到 MD 文件';
     if (/^[a-zA-Z]:[\\/]/.test(work.mdFile) || work.mdFile.startsWith('\\\\')) return work.mdFile;
@@ -2124,6 +2172,11 @@ function LocalWorksView({ works, worksPath, importPath, busy, onSetPath, onImpor
         <div className="tableActions">
           <button type="button" onClick={onSetPath}>设置作品路径</button>
           <button type="button" onClick={onImportDirectory} disabled={busy}>选择目录导入</button>
+          {mode === 'scanned' && works.length > 0 && (
+            <button type="button" className="primaryButton" onClick={onConfirmImport} disabled={busy}>
+              确认导入
+            </button>
+          )}
         </div>
       </div>
       {works.length > 0 ? (

@@ -68,6 +68,33 @@ function migrate(db) {
       value TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS local_works (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      folder_name TEXT NOT NULL,
+      folder_path TEXT NOT NULL,
+      md_file TEXT,
+      image_paths TEXT NOT NULL DEFAULT '[]',
+      publish_status TEXT NOT NULL DEFAULT '未发布',
+      source_root TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS local_work_children (
+      id TEXT PRIMARY KEY,
+      parent_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      variant_name TEXT NOT NULL,
+      folder_path TEXT NOT NULL,
+      image_paths TEXT NOT NULL DEFAULT '[]',
+      content TEXT NOT NULL DEFAULT '',
+      publish_status TEXT NOT NULL DEFAULT '未发布',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY(parent_id) REFERENCES local_works(id) ON DELETE CASCADE
+    );
   `);
 
   addColumnIfMissing(db, 'tasks', 'result', 'TEXT');

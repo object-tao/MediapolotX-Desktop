@@ -52,7 +52,9 @@ contextBridge.exposeInMainWorld('mediapolotx', {
     rewriteArticle: (payload) => ipcRenderer.invoke('content:rewriteArticle', payload)
   },
   localWorks: {
-    scanImportDirectory: (rootPath) => ipcRenderer.invoke('localWorks:scanImportDirectory', rootPath)
+    scanImportDirectory: (rootPath) => ipcRenderer.invoke('localWorks:scanImportDirectory', rootPath),
+    importScannedWorks: (payload) => ipcRenderer.invoke('localWorks:importScannedWorks', payload),
+    listImported: () => ipcRenderer.invoke('localWorks:listImported')
   },
   social: {
     platforms: () => ipcRenderer.invoke('social:platforms'),

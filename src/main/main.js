@@ -110,6 +110,14 @@ function registerIpc() {
     localWorkImporter.scanLocalWorks(rootPath)
   ));
 
+  ipcMain.handle('localWorks:importScannedWorks', async (_event, payload) => (
+    localWorkImporter.importScannedWorks(db, payload)
+  ));
+
+  ipcMain.handle('localWorks:listImported', () => (
+    localWorkImporter.listImportedWorks(db)
+  ));
+
   ipcMain.handle('storage:add', (_event, payload) => {
     const storage = storageManager.addStorage(payload.name, payload.type, payload.basePath);
     return storage;
