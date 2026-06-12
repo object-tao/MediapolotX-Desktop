@@ -1613,10 +1613,11 @@ function App() {
 
         {activeView === 'localWorks' && (
           <LocalWorksView
-            works={pagedLocalWorks}
+            works={localWorksMode === 'scanned' ? filteredLocalWorks : pagedLocalWorks}
             worksPath={localWorksPath}
             importPath={localWorksImportPath}
             busy={busy}
+            mode={localWorksMode}
             tagOptions={localWorkTags}
             tagFilter={localWorkTagFilter}
             totalCount={filteredLocalWorks.length}
@@ -2347,6 +2348,7 @@ function LocalWorksView({
   worksPath,
   importPath,
   busy,
+  mode,
   tagOptions,
   tagFilter,
   totalCount,
@@ -2430,7 +2432,7 @@ function LocalWorksView({
       ) : (
         <div className="empty">尚未导入本地作品。点击“选择目录导入”，选择包含作品文件夹的来源目录。</div>
       )}
-      {totalCount > pageSize && (
+      {mode !== 'scanned' && totalCount > pageSize && (
         <div className="promptPagination">
           <button className="secondaryButton" disabled={page <= 1} onClick={() => onPageChange(page - 1)}>
             上一页
