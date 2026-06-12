@@ -304,6 +304,7 @@ function App() {
   const [localWorksImportPath, setLocalWorksImportPath] = useState('');
   const [localWorksMode, setLocalWorksMode] = useState('imported');
   const [localWorkTagFilter, setLocalWorkTagFilter] = useState('all');
+  const [localWorkPage, setLocalWorkPage] = useState(1);
   const [localWorkTagEditor, setLocalWorkTagEditor] = useState(null);
   const [workPathModalOpen, setWorkPathModalOpen] = useState(false);
   const [workPathDraft, setWorkPathDraft] = useState('');
@@ -358,6 +359,13 @@ function App() {
       ? localWorksList
       : localWorksList.filter((work) => (work.tags || []).includes(localWorkTagFilter))
   ), [localWorkTagFilter, localWorksList]);
+  const localWorkPageSize = 20;
+  const localWorkPageCount = Math.max(1, Math.ceil(filteredLocalWorks.length / localWorkPageSize));
+  const pagedLocalWorks = useMemo(() => {
+    const normalizedPage = Math.min(localWorkPage, localWorkPageCount);
+    const start = (normalizedPage - 1) * localWorkPageSize;
+    return filteredLocalWorks.slice(start, start + localWorkPageSize);
+  }, [filteredLocalWorks, localWorkPage, localWorkPageCount]);
 
   useEffect(() => {
     if (localWorkTagFilter !== 'all' && !localWorkTags.includes(localWorkTagFilter)) {
@@ -475,6 +483,10 @@ function App() {
   useEffect(() => {
     setPromptPage((current) => Math.min(current, promptPageCount));
   }, [promptPageCount]);
+
+  useEffect(() => {
+    setLocalWorkPage((current) => Math.min(current, localWorkPageCount));
+  }, [localWorkPageCount]);
 
   useEffect(() => {
     function syncBounds() {
@@ -1601,13 +1613,21 @@ function App() {
 
         {activeView === 'localWorks' && (
           <LocalWorksView
-            works={filteredLocalWorks}
+            works={pagedLocalWorks}
             worksPath={localWorksPath}
             importPath={localWorksImportPath}
             busy={busy}
             tagOptions={localWorkTags}
             tagFilter={localWorkTagFilter}
-            onTagFilterChange={setLocalWorkTagFilter}
+            totalCount={filteredLocalWorks.length}
+            page={Math.min(localWorkPage, localWorkPageCount)}
+            pageCount={localWorkPageCount}
+            pageSize={localWorkPageSize}
+            onTagFilterChange={(nextTag) => {
+              setLocalWorkTagFilter(nextTag);
+              setLocalWorkPage(1);
+            }}
+            onPageChange={setLocalWorkPage}
             onEditTags={openLocalWorkTagEditor}
             onDeleteWork={deleteLocalWork}
             onOpenMainWork={setSelectedMainWork}
@@ -2329,7 +2349,12 @@ function LocalWorksView({
   busy,
   tagOptions,
   tagFilter,
+  totalCount,
+  page,
+  pageCount,
+  pageSize,
   onTagFilterChange,
+  onPageChange,
   onEditTags,
   onDeleteWork,
   onOpenMainWork,
@@ -2351,6 +2376,7 @@ function LocalWorksView({
           <span>作品存放路径：{worksPath || '尚未设置'}{importPath ? `；当前导入来源：${importPath}` : ''}</span>
         </div>
         <div className="tableActions">
+          <span>{totalCount} 条，每页 {pageSize} 条</span>
           <select value={tagFilter} onChange={(event) => onTagFilterChange(event.target.value)} disabled={busy}>
             <option value="all">全部标签</option>
             {tagOptions.map((tag) => (
@@ -2403,6 +2429,25 @@ function LocalWorksView({
         </div>
       ) : (
         <div className="empty">尚未导入本地作品。点击“选择目录导入”，选择包含作品文件夹的来源目录。</div>
+      )}
+      {totalCount > pageSize && (
+        <div className="promptPagination">
+          <button className="secondaryButton" disabled={page <= 1} onClick={() => onPageChange(page - 1)}>
+            上一页
+          </button>
+          {Array.from({ length: pageCount }, (_, index) => index + 1).map((pageNumber) => (
+            <button
+              className={`pageButton ${pageNumber === page ? 'active' : ''}`}
+              key={pageNumber}
+              onClick={() => onPageChange(pageNumber)}
+            >
+              {pageNumber}
+            </button>
+          ))}
+          <button className="secondaryButton" disabled={page >= pageCount} onClick={() => onPageChange(page + 1)}>
+            下一页
+          </button>
+        </div>
       )}
     </section>
   );
