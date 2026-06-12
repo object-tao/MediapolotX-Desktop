@@ -211,6 +211,12 @@ function listImportedWorks(db) {
     imagePaths: parseImagePaths(row.image_paths),
     tags: JSON.parse(row.tags || '[]'),
     content: row.content || '',
+    speechScript: row.speech_script || '',
+    speechScriptStatus: row.speech_script_status || (row.speech_script ? '已生成' : '未生成'),
+    speechScriptModelId: row.speech_script_model_id || '',
+    speechScriptPrompt: row.speech_script_prompt || '',
+    speechScriptSpeakerCount: Number(row.speech_script_speaker_count || 1),
+    speechScriptUpdatedAt: row.speech_script_updated_at || '',
     publishStatus: row.publish_status,
     publishRecords: publishMap.get(`main:${row.id}`) || [],
     children: (childMap.get(row.id) || []).map((child) => ({
@@ -535,6 +541,40 @@ function updateWorkCopy(db, { workId, title, content, children = [] }) {
   return listImportedWorks(db);
 }
 
+function updateWorkSpeechScript(db, {
+  workId,
+  script,
+  status = '已生成',
+  modelId = '',
+  promptTemplate = '',
+  speakerCount = 1
+}) {
+  if (!workId) throw new Error('缺少作品 ID');
+  const work = db.prepare('SELECT id FROM local_works WHERE id = @workId').get({ workId });
+  if (!work) throw new Error('作品不存在');
+  const now = nowIso();
+  db.prepare(`
+    UPDATE local_works
+    SET speech_script = @script,
+        speech_script_status = @status,
+        speech_script_model_id = @modelId,
+        speech_script_prompt = @promptTemplate,
+        speech_script_speaker_count = @speakerCount,
+        speech_script_updated_at = @updatedAt,
+        updated_at = @updatedAt
+    WHERE id = @workId
+  `).run({
+    workId,
+    script: String(script || ''),
+    status: normalizeSpeechScriptStatus(status, script),
+    modelId: modelId || '',
+    promptTemplate: promptTemplate || '',
+    speakerCount: Math.min(Math.max(Math.round(Number(speakerCount || 1)), 1), 4),
+    updatedAt: now
+  });
+  return listImportedWorks(db);
+}
+
 async function deleteImportedWork(db, { workId, targetRoot }) {
   if (!workId) throw new Error('缺少作品 ID');
   if (!targetRoot) throw new Error('请先设置作品路径');
@@ -561,6 +601,12 @@ function normalizePlatformPublishStatus(status) {
   return allowed.has(status) ? status : '未发布';
 }
 
+function normalizeSpeechScriptStatus(status, script) {
+  if (script) return '已生成';
+  const allowed = new Set(['未生成', '生成中', '已生成', '生成失败']);
+  return allowed.has(status) ? status : '未生成';
+}
+
 function normalizeTitle(value) {
   return String(value || '').trim().slice(0, 20) || '未命名作品';
 }
@@ -575,5 +621,6 @@ module.exports = {
   updateChildPublishStatus,
   updatePublishRecord,
   updateWorkCopy,
+  updateWorkSpeechScript,
   deleteImportedWork
 };

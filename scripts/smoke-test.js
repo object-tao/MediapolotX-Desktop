@@ -13,6 +13,7 @@ const wechatMpMarkdown = require('../src/modules/wechatMpMarkdown');
 const articleRewriter = require('../src/modules/articleRewriter');
 const localWorkImporter = require('../src/modules/localWorkImporter');
 const localWorkCopywriter = require('../src/modules/localWorkCopywriter');
+const localWorkSpeechwriter = require('../src/modules/localWorkSpeechwriter');
 const { createAiConfigManager } = require('../src/modules/aiConfigManager');
 const { createSocialAccountManager } = require('../src/modules/socialAccountManager');
 
@@ -311,6 +312,34 @@ line two" },
     || updatedLocalWork.children[0].content !== '这是另一段差异化子作品正文。'
   ) {
     throw new Error('Local work copywriter smoke test failed.');
+  }
+  const speechPromptTemplate = localWorkSpeechwriter.buildPromptTemplate({
+    sourceTitle: updatedLocalWork.title,
+    copyContent: updatedLocalWork.content,
+    speakerCount: 2
+  });
+  const generatedSpeech = await localWorkSpeechwriter.generateLocalWorkSpeech(
+    updatedLocalWork,
+    { modelId: qwenWithStaleResource.id, promptTemplate: speechPromptTemplate, speakerCount: 2 },
+    async (options) => {
+      if (!options.messages[1].content.includes('人物数：2')) {
+        throw new Error('Local work speechwriter prompt smoke test failed.');
+      }
+      return {
+        modelId: qwenWithStaleResource.id,
+        modelName: 'Smoke Qwen',
+        content: '第1段\nA：今天聊一个海关公告重点。\nB：企业要先关注申报规范。'
+      };
+    }
+  );
+  const speechWorks = localWorkImporter.updateWorkSpeechScript(db, generatedSpeech);
+  const speechWork = speechWorks.find((work) => work.id === localWorkId);
+  if (
+    speechWork.speechScriptStatus !== '已生成'
+    || !speechWork.speechScript.includes('海关公告重点')
+    || speechWork.speechScriptSpeakerCount !== 2
+  ) {
+    throw new Error('Local work speechwriter smoke test failed.');
   }
   const publishRecordWorks = localWorkImporter.updatePublishRecord(db, {
     targetType: 'child',

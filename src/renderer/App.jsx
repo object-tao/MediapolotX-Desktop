@@ -342,6 +342,8 @@ function App() {
   const [selectedMainWork, setSelectedMainWork] = useState(null);
   const [copywriterModal, setCopywriterModal] = useState(null);
   const [copywriterProgress, setCopywriterProgress] = useState(null);
+  const [speechwriterModal, setSpeechwriterModal] = useState(null);
+  const [speechwriterProgress, setSpeechwriterProgress] = useState(null);
   const [publishRecordEditor, setPublishRecordEditor] = useState(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -412,6 +414,13 @@ function App() {
     if (!window.mediapolotx.localWorks?.onCopyProgress) return undefined;
     return window.mediapolotx.localWorks.onCopyProgress((progress) => {
       setCopywriterProgress(progress);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!window.mediapolotx.localWorks?.onSpeechProgress) return undefined;
+    return window.mediapolotx.localWorks.onSpeechProgress((progress) => {
+      setSpeechwriterProgress(progress);
     });
   }, []);
 
@@ -1434,6 +1443,75 @@ function App() {
     }
   }
 
+  async function openSpeechwriterModal(work) {
+    const defaultModelId = aiStore.defaultTextModelId || aiTextModels[0]?.id || '';
+    const speakerCount = String(work.speechScriptSpeakerCount || 1);
+    let promptTemplate = work.speechScriptPrompt || '';
+    if (!promptTemplate) {
+      try {
+        promptTemplate = await window.mediapolotx.localWorks.getSpeechPromptTemplate({
+          workId: work.id,
+          speakerCount
+        });
+      } catch (error) {
+        setMessage(`加载默认口播提示词失败：${cleanRemoteError(error)}`);
+      }
+    }
+    setSpeechwriterModal({
+      work,
+      modelId: work.speechScriptModelId || defaultModelId,
+      temperature: '0.65',
+      maxTokens: '4096',
+      speakerCount,
+      promptTemplate,
+      existingScript: work.speechScript || ''
+    });
+    setSpeechwriterProgress(null);
+  }
+
+  async function generateLocalWorkSpeech() {
+    if (!speechwriterModal?.work) return;
+    if (!speechwriterModal.modelId) {
+      setMessage('请先选择一个可用的 AI 文本模型');
+      return;
+    }
+    try {
+      setBusy(true);
+      setSpeechwriterProgress({
+        stage: 'start',
+        current: 0,
+        total: 1,
+        label: '准备生成口播脚本'
+      });
+      setMessage('正在生成口播脚本...');
+      const result = await window.mediapolotx.localWorks.generateSpeech({
+        workId: speechwriterModal.work.id,
+        modelId: speechwriterModal.modelId,
+        temperature: speechwriterModal.temperature,
+        maxTokens: speechwriterModal.maxTokens,
+        speakerCount: speechwriterModal.speakerCount,
+        promptTemplate: speechwriterModal.promptTemplate
+      });
+      setLocalWorksList(result.works);
+      const updatedWork = result.works.find((work) => work.id === speechwriterModal.work.id);
+      if (updatedWork) {
+        setSelectedMainWork((current) => (current?.id === updatedWork.id ? updatedWork : current));
+        setSelectedLocalWork((current) => (current?.id === updatedWork.id ? updatedWork : current));
+      }
+      setSpeechwriterModal((current) => current ? {
+        ...current,
+        work: updatedWork || current.work,
+        existingScript: result.generated.script
+      } : current);
+      setSpeechwriterProgress(null);
+      setMessage(`口播脚本生成完成：${updatedWork?.title || result.generated.modelName || '已保存'}`);
+    } catch (error) {
+      setMessage(`口播脚本生成失败：${cleanRemoteError(error)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function runTask(taskRunner) {
     setBusy(true);
     setMessage('任务执行中...');
@@ -1838,6 +1916,7 @@ function App() {
             onEditTags={openLocalWorkTagEditor}
             onDeleteWork={deleteLocalWork}
             onGenerateCopy={openCopywriterModal}
+            onGenerateSpeech={openSpeechwriterModal}
             onEditPublishRecords={(work) => openPublishRecordEditor('main', work)}
             onOpenMainWork={setSelectedMainWork}
             onOpenPath={openPath}
@@ -2466,6 +2545,22 @@ function App() {
             }}
           />
         )}
+        {speechwriterModal && (
+          <LocalWorkSpeechwriterModal
+            value={speechwriterModal}
+            models={aiTextModels}
+            busy={busy}
+            progress={speechwriterProgress}
+            onChange={setSpeechwriterModal}
+            onGenerate={generateLocalWorkSpeech}
+            onClose={() => {
+              if (!busy) {
+                setSpeechwriterModal(null);
+                setSpeechwriterProgress(null);
+              }
+            }}
+          />
+        )}
         {selectedPrompt && (
           <PromptDetailModal
             prompt={selectedPrompt}
@@ -2597,6 +2692,7 @@ function LocalWorksView({
   onEditTags,
   onDeleteWork,
   onGenerateCopy,
+  onGenerateSpeech,
   onEditPublishRecords,
   onOpenMainWork,
   onOpenPath,
@@ -2632,6 +2728,7 @@ function LocalWorksView({
             <span>序号</span>
             <span>图片数</span>
             <span>文案</span>
+            <span>口播</span>
             <span>标题</span>
             <span>标签</span>
             <span>子作品数量</span>
@@ -2649,6 +2746,12 @@ function LocalWorksView({
                     子 {childCopyCount(work)}/{work.children.length}
                   </small>
                 )}
+              </span>
+              <span className="copyStatusCell">
+                <small className={work.speechScript ? 'copyReady' : 'copyMissing'}>{work.speechScript ? '已生成' : '未生成'}</small>
+                <button type="button" className="linkButton" onClick={() => onGenerateSpeech(work)} disabled={busy || mode === 'scanned' || !work.mdFile}>
+                  {work.speechScript ? '查看/重新生成' : '生成'}
+                </button>
               </span>
               <span title={work.title}>
                 <button type="button" className="linkButton titleLink" onClick={() => onOpenMainWork(work)}>
@@ -2974,6 +3077,98 @@ function PublishStatusSelect({ value, onChange, disabled = false }) {
         <option key={status} value={status}>{status}</option>
       ))}
     </select>
+  );
+}
+
+function LocalWorkSpeechwriterModal({ value, models, busy, progress, onChange, onGenerate, onClose }) {
+  const work = value.work;
+  const selectedModel = models.find((model) => model.id === value.modelId);
+  const percent = progress?.total ? Math.round((Number(progress.current || 0) / Number(progress.total || 1)) * 100) : 0;
+  return (
+    <div className="modalBackdrop">
+      <div className="mediaAccountModal workPathModal copywriterModal">
+        <div className="modalHeader">
+          <div>
+            <h2>生成口播脚本</h2>
+            <p>{work.title}</p>
+          </div>
+          <button className="iconButton" onClick={onClose} disabled={busy}>×</button>
+        </div>
+        <div className="modalSection">
+          <label>
+            AI 模型
+            <select value={value.modelId} onChange={(event) => onChange({ ...value, modelId: event.target.value })} disabled={busy}>
+              <option value="">请选择文本模型</option>
+              {models.map((model) => (
+                <option key={model.id} value={model.id}>{model.name} / {model.model}</option>
+              ))}
+            </select>
+            {selectedModel && (
+              <small className={selectedModel.hasApiKey ? 'mutedText' : 'dangerText'}>
+                {selectedModel.hasApiKey ? '将使用该模型已保存的 API Key' : '该模型没有已保存的 API Key，请先到 AI 模型配置保存'}
+              </small>
+            )}
+          </label>
+          <div className="splitInputs">
+            <label>
+              Temperature
+              <input type="number" min="0" max="2" step="0.05" value={value.temperature} onChange={(event) => onChange({ ...value, temperature: event.target.value })} disabled={busy} />
+            </label>
+            <label>
+              Max Tokens
+              <input type="number" min="1024" max="12000" step="512" value={value.maxTokens} onChange={(event) => onChange({ ...value, maxTokens: event.target.value })} disabled={busy} />
+            </label>
+            <label>
+              人物数
+              <select value={value.speakerCount} onChange={(event) => onChange({ ...value, speakerCount: event.target.value })} disabled={busy}>
+                <option value="1">1 人</option>
+                <option value="2">2 人 A/B</option>
+                <option value="3">3 人 A/B/C</option>
+                <option value="4">4 人 A/B/C/D</option>
+              </select>
+            </label>
+          </div>
+          <div className="toolIntro">
+            <p>生成后会覆盖当前主作品的口播脚本；单段控制在 1 分钟以内，内容较长时拆成多段。子作品不在本次生成范围内。</p>
+          </div>
+          <label>
+            提交给 AI 的提示词
+            <textarea
+              className="largeTextarea copyPromptTextarea"
+              value={value.promptTemplate || ''}
+              onChange={(event) => onChange({ ...value, promptTemplate: event.target.value })}
+              disabled={busy}
+            />
+          </label>
+          {value.existingScript && (
+            <label>
+              当前口播脚本
+              <textarea
+                className="largeTextarea speechScriptTextarea"
+                value={value.existingScript}
+                onChange={(event) => onChange({ ...value, existingScript: event.target.value })}
+                readOnly
+              />
+            </label>
+          )}
+          {progress && (
+            <div className="copyProgress">
+              <div>
+                <span>{progress.label}</span>
+                <strong>{percent}%</strong>
+              </div>
+              <progress value={percent} max="100" />
+            </div>
+          )}
+        </div>
+        <div className="modalActions">
+          <button type="button" className="secondaryButton" onClick={onClose} disabled={busy}>取消</button>
+          <button type="button" onClick={onGenerate} disabled={busy || !value.modelId || !selectedModel?.hasApiKey || models.length === 0}>
+            {value.existingScript ? '重新生成' : '开始生成'}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

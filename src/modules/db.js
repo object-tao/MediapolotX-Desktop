@@ -78,6 +78,12 @@ function migrate(db) {
       image_paths TEXT NOT NULL DEFAULT '[]',
       tags TEXT NOT NULL DEFAULT '[]',
       content TEXT NOT NULL DEFAULT '',
+      speech_script TEXT NOT NULL DEFAULT '',
+      speech_script_status TEXT NOT NULL DEFAULT '未生成',
+      speech_script_model_id TEXT,
+      speech_script_prompt TEXT,
+      speech_script_speaker_count INTEGER NOT NULL DEFAULT 1,
+      speech_script_updated_at TEXT,
       publish_status TEXT NOT NULL DEFAULT '未发布',
       source_root TEXT,
       created_at TEXT NOT NULL,
@@ -118,6 +124,12 @@ function migrate(db) {
   addColumnIfMissing(db, 'tasks', 'result', 'TEXT');
   addColumnIfMissing(db, 'local_works', 'tags', "TEXT NOT NULL DEFAULT '[]'");
   addColumnIfMissing(db, 'local_works', 'content', "TEXT NOT NULL DEFAULT ''");
+  addColumnIfMissing(db, 'local_works', 'speech_script', "TEXT NOT NULL DEFAULT ''");
+  addColumnIfMissing(db, 'local_works', 'speech_script_status', "TEXT NOT NULL DEFAULT '未生成'");
+  addColumnIfMissing(db, 'local_works', 'speech_script_model_id', 'TEXT');
+  addColumnIfMissing(db, 'local_works', 'speech_script_prompt', 'TEXT');
+  addColumnIfMissing(db, 'local_works', 'speech_script_speaker_count', 'INTEGER NOT NULL DEFAULT 1');
+  addColumnIfMissing(db, 'local_works', 'speech_script_updated_at', 'TEXT');
 }
 
 function addColumnIfMissing(db, tableName, columnName, columnDefinition) {

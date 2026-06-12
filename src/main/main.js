@@ -14,6 +14,7 @@ const wechatMpMarkdown = require('../modules/wechatMpMarkdown');
 const articleRewriter = require('../modules/articleRewriter');
 const localWorkImporter = require('../modules/localWorkImporter');
 const localWorkCopywriter = require('../modules/localWorkCopywriter');
+const localWorkSpeechwriter = require('../modules/localWorkSpeechwriter');
 const { createAiConfigManager } = require('../modules/aiConfigManager');
 const { createSocialAccountManager } = require('../modules/socialAccountManager');
 const { createProxyManager } = require('../modules/proxyManager');
@@ -171,6 +172,18 @@ function registerIpc() {
     });
   });
 
+  ipcMain.handle('localWorks:getSpeechPromptTemplate', (_event, payload) => {
+    const works = localWorkImporter.listImportedWorks(db);
+    const work = works.find((item) => item.id === payload.workId);
+    if (!work) throw new Error('作品不存在');
+    return localWorkSpeechwriter.buildPromptTemplate({
+      sourceTitle: work.title,
+      copyTitle: work.title,
+      copyContent: work.content || '',
+      speakerCount: payload.speakerCount || work.speechScriptSpeakerCount || 1
+    });
+  });
+
   ipcMain.handle('localWorks:generateCopy', async (event, payload) => {
     const works = localWorkImporter.listImportedWorks(db);
     const work = works.find((item) => item.id === payload.workId);
@@ -182,6 +195,23 @@ function registerIpc() {
       (progress) => event.sender.send('localWorks:copyProgress', progress)
     );
     const updatedWorks = localWorkImporter.updateWorkCopy(db, generated);
+    return {
+      generated,
+      works: updatedWorks
+    };
+  });
+
+  ipcMain.handle('localWorks:generateSpeech', async (event, payload) => {
+    const works = localWorkImporter.listImportedWorks(db);
+    const work = works.find((item) => item.id === payload.workId);
+    if (!work) throw new Error('作品不存在');
+    const generated = await localWorkSpeechwriter.generateLocalWorkSpeech(
+      work,
+      payload,
+      (options) => aiConfigManager.completeText(options),
+      (progress) => event.sender.send('localWorks:speechProgress', progress)
+    );
+    const updatedWorks = localWorkImporter.updateWorkSpeechScript(db, generated);
     return {
       generated,
       works: updatedWorks

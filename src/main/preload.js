@@ -61,12 +61,19 @@ contextBridge.exposeInMainWorld('mediapolotx', {
     updateChildStatus: (payload) => ipcRenderer.invoke('localWorks:updateChildStatus', payload),
     updatePublishRecord: (payload) => ipcRenderer.invoke('localWorks:updatePublishRecord', payload),
     getCopyPromptTemplate: (payload) => ipcRenderer.invoke('localWorks:getCopyPromptTemplate', payload),
+    getSpeechPromptTemplate: (payload) => ipcRenderer.invoke('localWorks:getSpeechPromptTemplate', payload),
     generateCopy: (payload) => ipcRenderer.invoke('localWorks:generateCopy', payload),
+    generateSpeech: (payload) => ipcRenderer.invoke('localWorks:generateSpeech', payload),
     delete: (payload) => ipcRenderer.invoke('localWorks:delete', payload),
     onCopyProgress: (callback) => {
       const listener = (_event, payload) => callback(payload);
       ipcRenderer.on('localWorks:copyProgress', listener);
       return () => ipcRenderer.removeListener('localWorks:copyProgress', listener);
+    },
+    onSpeechProgress: (callback) => {
+      const listener = (_event, payload) => callback(payload);
+      ipcRenderer.on('localWorks:speechProgress', listener);
+      return () => ipcRenderer.removeListener('localWorks:speechProgress', listener);
     }
   },
   social: {
