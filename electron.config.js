@@ -17,13 +17,16 @@ module.exports = {
     main: 'src/main/main.js'
   },
   win: {
+    icon: 'assets/icons/app.ico',
     target: ['nsis', 'zip']
   },
   mac: {
+    icon: 'assets/icons/app.png',
     target: ['dmg', 'zip'],
     category: 'public.app-category.photography'
   },
   linux: {
+    icon: 'assets/icons/app.png',
     target: ['AppImage', 'deb'],
     category: 'Graphics'
   },

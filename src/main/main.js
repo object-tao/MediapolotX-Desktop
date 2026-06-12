@@ -30,6 +30,12 @@ const watchers = new Map();
 const socialBrowserViews = new Map();
 let activeSocialViewId = null;
 
+function assetPath(...segments) {
+  return app.isPackaged
+    ? path.join(process.resourcesPath, ...segments)
+    : path.join(__dirname, '../..', ...segments);
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -37,6 +43,7 @@ function createWindow() {
     minWidth: 1040,
     minHeight: 680,
     title: config.appName,
+    icon: assetPath('assets', 'icons', process.platform === 'win32' ? 'app.ico' : 'app.png'),
     backgroundColor: '#f6f7f9',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
