@@ -190,6 +190,17 @@ function listImportedWorks(db) {
     children.push(childRowToUi(child));
     childMap.set(child.parent_id, children);
   }
+  const publishRows = db.prepare(`
+    SELECT * FROM local_work_publish_records
+    ORDER BY platform ASC, updated_at DESC
+  `).all();
+  const publishMap = new Map();
+  for (const record of publishRows) {
+    const key = `${record.target_type}:${record.target_id}`;
+    const records = publishMap.get(key) || [];
+    records.push(publishRecordToUi(record));
+    publishMap.set(key, records);
+  }
   return rows.map((row) => ({
     id: row.id,
     serialNo: Number(row.serial_no || 0),
@@ -201,8 +212,29 @@ function listImportedWorks(db) {
     tags: JSON.parse(row.tags || '[]'),
     content: row.content || '',
     publishStatus: row.publish_status,
-    children: childMap.get(row.id) || []
+    publishRecords: publishMap.get(`main:${row.id}`) || [],
+    children: (childMap.get(row.id) || []).map((child) => ({
+      ...child,
+      publishRecords: publishMap.get(`child:${child.id}`) || []
+    }))
   }));
+}
+
+function publishRecordToUi(record) {
+  return {
+    id: record.id,
+    targetType: record.target_type,
+    targetId: record.target_id,
+    platform: record.platform,
+    accountId: record.account_id || '',
+    status: record.status,
+    publishUrl: record.publish_url || '',
+    platformWorkId: record.platform_work_id || '',
+    publishedAt: record.published_at || '',
+    errorMessage: record.error_message || '',
+    createdAt: record.created_at,
+    updatedAt: record.updated_at
+  };
 }
 
 async function importScannedWorks(db, { sourceRoot, targetRoot, works = [] }) {
@@ -415,6 +447,53 @@ function updateChildPublishStatus(db, { childId, publishStatus }) {
   return listImportedWorks(db);
 }
 
+function updatePublishRecord(db, payload) {
+  const targetType = payload.targetType === 'child' ? 'child' : 'main';
+  const targetId = String(payload.targetId || '');
+  const platform = String(payload.platform || '').trim();
+  if (!targetId) throw new Error('缺少发布对象 ID');
+  if (!platform) throw new Error('缺少发布平台');
+  ensurePublishTargetExists(db, targetType, targetId);
+
+  const now = nowIso();
+  const id = `publish-${targetType}-${Buffer.from(targetId).toString('base64url')}-${platform}`;
+  db.prepare(`
+    INSERT INTO local_work_publish_records (
+      id, target_type, target_id, platform, account_id, status, publish_url, platform_work_id, published_at, error_message, created_at, updated_at
+    ) VALUES (
+      @id, @targetType, @targetId, @platform, @accountId, @status, @publishUrl, @platformWorkId, @publishedAt, @errorMessage, @createdAt, @updatedAt
+    )
+    ON CONFLICT(target_type, target_id, platform) DO UPDATE SET
+      account_id = excluded.account_id,
+      status = excluded.status,
+      publish_url = excluded.publish_url,
+      platform_work_id = excluded.platform_work_id,
+      published_at = excluded.published_at,
+      error_message = excluded.error_message,
+      updated_at = excluded.updated_at
+  `).run({
+    id,
+    targetType,
+    targetId,
+    platform,
+    accountId: payload.accountId || '',
+    status: normalizePlatformPublishStatus(payload.status),
+    publishUrl: payload.publishUrl || '',
+    platformWorkId: payload.platformWorkId || '',
+    publishedAt: payload.publishedAt || '',
+    errorMessage: payload.errorMessage || '',
+    createdAt: now,
+    updatedAt: now
+  });
+  return listImportedWorks(db);
+}
+
+function ensurePublishTargetExists(db, targetType, targetId) {
+  const table = targetType === 'child' ? 'local_work_children' : 'local_works';
+  const row = db.prepare(`SELECT id FROM ${table} WHERE id = @targetId`).get({ targetId });
+  if (!row) throw new Error('发布对象不存在');
+}
+
 function updateWorkCopy(db, { workId, title, content, children = [] }) {
   if (!workId) throw new Error('缺少作品 ID');
   const now = nowIso();
@@ -477,6 +556,11 @@ function normalizePublishStatus(status) {
   return allowed.has(status) ? status : '未发布';
 }
 
+function normalizePlatformPublishStatus(status) {
+  const allowed = new Set(['未发布', '待发布', '发布中', '已发布', '发布失败', '已下架']);
+  return allowed.has(status) ? status : '未发布';
+}
+
 function normalizeTitle(value) {
   return String(value || '').trim().slice(0, 20) || '未命名作品';
 }
@@ -489,6 +573,7 @@ module.exports = {
   updateWorkTags,
   updateWorkPublishStatus,
   updateChildPublishStatus,
+  updatePublishRecord,
   updateWorkCopy,
   deleteImportedWork
 };

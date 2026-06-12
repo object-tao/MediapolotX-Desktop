@@ -16,6 +16,20 @@ const PLATFORMS = {
     publishUrl: 'https://mp.weixin.qq.com/',
     worksUrl: 'https://mp.weixin.qq.com/',
     dataUrl: 'https://mp.weixin.qq.com/'
+  },
+  douyin: {
+    label: '抖音',
+    homeUrl: 'https://creator.douyin.com/',
+    publishUrl: 'https://creator.douyin.com/creator-micro/content/upload',
+    worksUrl: 'https://creator.douyin.com/creator-micro/content/manage',
+    dataUrl: 'https://creator.douyin.com/creator-micro/data'
+  },
+  shipinhao: {
+    label: '视频号',
+    homeUrl: 'https://channels.weixin.qq.com/platform',
+    publishUrl: 'https://channels.weixin.qq.com/platform/post/create',
+    worksUrl: 'https://channels.weixin.qq.com/platform/post/list',
+    dataUrl: 'https://channels.weixin.qq.com/platform/data'
   }
 };
 

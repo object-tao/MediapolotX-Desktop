@@ -304,6 +304,24 @@ try {
   ) {
     throw new Error('Local work copywriter smoke test failed.');
   }
+  const publishRecordWorks = localWorkImporter.updatePublishRecord(db, {
+    targetType: 'child',
+    targetId: childId,
+    platform: 'xiaohongshu',
+    accountId: 'account-1',
+    status: '已发布',
+    publishUrl: 'https://example.com/post',
+    publishedAt: now
+  });
+  const publishRecordWork = publishRecordWorks.find((work) => work.id === localWorkId);
+  if (
+    publishRecordWork.children[0].publishRecords.length !== 1
+    || publishRecordWork.children[0].publishRecords[0].platform !== 'xiaohongshu'
+    || publishRecordWork.children[0].publishRecords[0].accountId !== 'account-1'
+    || publishRecordWork.children[0].publishRecords[0].status !== '已发布'
+  ) {
+    throw new Error('Local work publish record smoke test failed.');
+  }
 
   const rewriteDir = path.join(tempRoot, 'rewrite-output');
   const rewriteResult = await articleRewriter.rewriteArticle({

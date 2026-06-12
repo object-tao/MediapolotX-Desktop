@@ -889,6 +889,50 @@ textarea {
   color: #64748b;
 }
 
+.publishSummaryCell .linkButton {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.publishRecordModal {
+  max-width: 860px;
+}
+
+.publishRecordList {
+  display: grid;
+  gap: 12px;
+  max-height: 68vh;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.publishRecordItem {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #dbe5ee;
+  border-radius: 6px;
+  background: #f8fafc;
+}
+
+.publishRecordHead {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.publishRecordHead small {
+  color: #64748b;
+}
+
+.inlineActions {
+  justify-content: flex-end;
+  padding-top: 0;
+}
+
 .mutedText {
   color: #64748b;
 }

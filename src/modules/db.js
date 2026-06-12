@@ -97,6 +97,22 @@ function migrate(db) {
       updated_at TEXT NOT NULL,
       FOREIGN KEY(parent_id) REFERENCES local_works(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS local_work_publish_records (
+      id TEXT PRIMARY KEY,
+      target_type TEXT NOT NULL,
+      target_id TEXT NOT NULL,
+      platform TEXT NOT NULL,
+      account_id TEXT,
+      status TEXT NOT NULL DEFAULT '未发布',
+      publish_url TEXT,
+      platform_work_id TEXT,
+      published_at TEXT,
+      error_message TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE(target_type, target_id, platform)
+    );
   `);
 
   addColumnIfMissing(db, 'tasks', 'result', 'TEXT');

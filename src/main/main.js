@@ -146,6 +146,10 @@ function registerIpc() {
     localWorkImporter.updateChildPublishStatus(db, payload)
   ));
 
+  ipcMain.handle('localWorks:updatePublishRecord', async (_event, payload) => (
+    localWorkImporter.updatePublishRecord(db, payload)
+  ));
+
   ipcMain.handle('localWorks:delete', async (_event, payload) => (
     localWorkImporter.deleteImportedWork(db, payload)
   ));

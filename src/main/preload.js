@@ -59,6 +59,7 @@ contextBridge.exposeInMainWorld('mediapolotx', {
     updateTags: (payload) => ipcRenderer.invoke('localWorks:updateTags', payload),
     updateWorkStatus: (payload) => ipcRenderer.invoke('localWorks:updateWorkStatus', payload),
     updateChildStatus: (payload) => ipcRenderer.invoke('localWorks:updateChildStatus', payload),
+    updatePublishRecord: (payload) => ipcRenderer.invoke('localWorks:updatePublishRecord', payload),
     getCopyPromptTemplate: (payload) => ipcRenderer.invoke('localWorks:getCopyPromptTemplate', payload),
     generateCopy: (payload) => ipcRenderer.invoke('localWorks:generateCopy', payload),
     delete: (payload) => ipcRenderer.invoke('localWorks:delete', payload),

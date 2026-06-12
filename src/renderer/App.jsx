@@ -47,7 +47,13 @@ const articleLengthOptions = [
   { value: '短文', label: '短文' }
 ];
 
-const localWorkPublishStatuses = ['未发布', '已发布', '部分发布', '发布失败'];
+const platformPublishStatuses = ['未发布', '待发布', '发布中', '已发布', '发布失败', '已下架'];
+const localWorkPublishPlatforms = [
+  { value: 'xiaohongshu', label: '小红书' },
+  { value: 'wechat', label: '公众号' },
+  { value: 'douyin', label: '抖音' },
+  { value: 'shipinhao', label: '视频号' }
+];
 
 function createDefaultProxyConfig() {
   return {
@@ -65,14 +71,16 @@ function createDefaultProxyConfig() {
 
 const socialPlatformFallbacks = [
   { value: 'xiaohongshu', label: '小红书' },
-  { value: 'wechat', label: '公众号' }
+  { value: 'wechat', label: '公众号' },
+  { value: 'douyin', label: '抖音' },
+  { value: 'shipinhao', label: '视频号' }
 ];
 
 const mediaPlatformCards = [
   { value: 'xiaohongshu', label: '小红书', icon: '小', enabled: true },
   { value: 'wechat', label: '公众号', icon: '公', enabled: true },
-  { value: 'douyin', label: '抖音', icon: '抖', enabled: false },
-  { value: 'shipinhao', label: '视频号', icon: '视', enabled: false },
+  { value: 'douyin', label: '抖音', icon: '抖', enabled: true },
+  { value: 'shipinhao', label: '视频号', icon: '视', enabled: true },
   { value: 'kuaishou', label: '快手', icon: '快', enabled: false },
   { value: 'bilibili', label: '哔哩哔哩', icon: 'B', enabled: false },
   { value: 'toutiao', label: '头条号', icon: '头', enabled: false },
@@ -334,6 +342,7 @@ function App() {
   const [selectedMainWork, setSelectedMainWork] = useState(null);
   const [copywriterModal, setCopywriterModal] = useState(null);
   const [copywriterProgress, setCopywriterProgress] = useState(null);
+  const [publishRecordEditor, setPublishRecordEditor] = useState(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -1320,53 +1329,51 @@ function App() {
     }
   }
 
-  async function updateLocalWorkStatus(work, publishStatus) {
-    if (!work || work.publishStatus === publishStatus) return;
-    if (localWorksMode === 'scanned') {
-      setLocalWorksList((current) => current.map((item) => (
-        item.id === work.id ? { ...item, publishStatus } : item
-      )));
-      return;
-    }
-    const works = await window.mediapolotx.localWorks.updateWorkStatus({
-      workId: work.id,
-      publishStatus
+  function openPublishRecordEditor(targetType, item) {
+    setPublishRecordEditor({
+      targetType,
+      targetId: item.id,
+      title: item.title,
+      records: buildPublishRecordDrafts(item.publishRecords || [])
     });
-    setLocalWorksList(works);
-    setSelectedMainWork((current) => (current?.id === work.id ? { ...current, publishStatus } : current));
-    setSelectedLocalWork((current) => (current?.id === work.id ? works.find((item) => item.id === work.id) || current : current));
-    setMessage('主作品发布状态已更新');
   }
 
-  async function updateLocalChildStatus(child, publishStatus) {
-    if (!child || child.publishStatus === publishStatus) return;
-    if (localWorksMode === 'scanned') {
-      setLocalWorksList((current) => current.map((work) => ({
-        ...work,
-        children: work.children.map((item) => (
-          item.id === child.id ? { ...item, publishStatus } : item
-        ))
-      })));
-      setSelectedChildWork((current) => (current?.id === child.id ? { ...current, publishStatus } : current));
-      setSelectedLocalWork((current) => current ? {
-        ...current,
-        children: current.children.map((item) => (
-          item.id === child.id ? { ...item, publishStatus } : item
-        ))
-      } : current);
-      return;
+  async function savePublishRecord(record) {
+    if (!publishRecordEditor) return;
+    try {
+      setBusy(true);
+      const works = await window.mediapolotx.localWorks.updatePublishRecord({
+        targetType: publishRecordEditor.targetType,
+        targetId: publishRecordEditor.targetId,
+        ...record
+      });
+      setLocalWorksList(works);
+      const updatedMain = works.find((work) => (
+        publishRecordEditor.targetType === 'main'
+          ? work.id === publishRecordEditor.targetId
+          : work.children.some((child) => child.id === publishRecordEditor.targetId)
+      ));
+      if (updatedMain) {
+        setSelectedMainWork((current) => (current?.id === updatedMain.id ? updatedMain : current));
+        setSelectedLocalWork((current) => (current?.id === updatedMain.id ? updatedMain : current));
+        setSelectedChildWork((current) => {
+          if (!current || publishRecordEditor.targetType !== 'child') return current;
+          return updatedMain.children.find((child) => child.id === publishRecordEditor.targetId) || current;
+        });
+        const nextTarget = publishRecordEditor.targetType === 'main'
+          ? updatedMain
+          : updatedMain.children.find((child) => child.id === publishRecordEditor.targetId);
+        setPublishRecordEditor((current) => current ? {
+          ...current,
+          records: buildPublishRecordDrafts(nextTarget?.publishRecords || [])
+        } : current);
+      }
+      setMessage('平台发布状态已保存');
+    } catch (error) {
+      setMessage(`保存发布状态失败：${cleanRemoteError(error)}`);
+    } finally {
+      setBusy(false);
     }
-    const works = await window.mediapolotx.localWorks.updateChildStatus({
-      childId: child.id,
-      publishStatus
-    });
-    setLocalWorksList(works);
-    setSelectedChildWork((current) => (current?.id === child.id ? { ...current, publishStatus } : current));
-    setSelectedLocalWork((current) => {
-      if (!current) return current;
-      return works.find((work) => work.id === current.id) || current;
-    });
-    setMessage('子作品发布状态已更新');
   }
 
   async function openCopywriterModal(work) {
@@ -1831,7 +1838,7 @@ function App() {
             onEditTags={openLocalWorkTagEditor}
             onDeleteWork={deleteLocalWork}
             onGenerateCopy={openCopywriterModal}
-            onStatusChange={updateLocalWorkStatus}
+            onEditPublishRecords={(work) => openPublishRecordEditor('main', work)}
             onOpenMainWork={setSelectedMainWork}
             onOpenPath={openPath}
             onOpenChildren={(work) => {
@@ -2408,7 +2415,7 @@ function App() {
             work={selectedLocalWork}
             selectedChild={selectedChildWork}
             onSelectChild={setSelectedChildWork}
-            onChildStatusChange={updateLocalChildStatus}
+            onEditPublishRecords={(child) => openPublishRecordEditor('child', child)}
             onBack={() => setSelectedChildWork(null)}
             onClose={() => {
               setSelectedLocalWork(null);
@@ -2421,6 +2428,7 @@ function App() {
             title={selectedMainWork.title}
             subtitle={`主作品 · ${selectedMainWork.publishStatus}`}
             item={mainWorkPreviewItem(selectedMainWork)}
+            onEditPublishRecords={() => openPublishRecordEditor('main', selectedMainWork)}
             onClose={() => setSelectedMainWork(null)}
           />
         )}
@@ -2430,6 +2438,16 @@ function App() {
             onChange={setLocalWorkTagEditor}
             onSave={saveLocalWorkTags}
             onClose={() => setLocalWorkTagEditor(null)}
+          />
+        )}
+        {publishRecordEditor && (
+          <PublishRecordModal
+            editor={publishRecordEditor}
+            accounts={socialAccounts}
+            busy={busy}
+            onChange={setPublishRecordEditor}
+            onSaveRecord={savePublishRecord}
+            onClose={() => setPublishRecordEditor(null)}
           />
         )}
         {copywriterModal && (
@@ -2579,7 +2597,7 @@ function LocalWorksView({
   onEditTags,
   onDeleteWork,
   onGenerateCopy,
-  onStatusChange,
+  onEditPublishRecords,
   onOpenMainWork,
   onOpenPath,
   onOpenChildren
@@ -2617,7 +2635,7 @@ function LocalWorksView({
             <span>标题</span>
             <span>标签</span>
             <span>子作品数量</span>
-            <span>发布状态</span>
+            <span>平台发布</span>
             <span>操作</span>
           </div>
           {works.map((work) => (
@@ -2650,12 +2668,10 @@ function LocalWorksView({
                   '0 个'
                 )}
               </span>
-              <span>
-                <PublishStatusSelect
-                  value={work.publishStatus}
-                  onChange={(nextStatus) => onStatusChange(work, nextStatus)}
-                  disabled={busy}
-                />
+              <span className="publishSummaryCell">
+                <button type="button" className="linkButton" onClick={() => onEditPublishRecords(work)}>
+                  {publishSummaryText(work.publishRecords)}
+                </button>
               </span>
               <span className="rowActions">
                 <button type="button" onClick={() => onOpenPath(workMdPath(work))} disabled={!work.mdFile}>打开MD</button>
@@ -2757,6 +2773,83 @@ function LocalWorkCopywriterModal({ value, models, busy, progress, onChange, onG
         <div className="modalActions">
           <button type="button" className="secondaryButton" onClick={onClose} disabled={busy}>取消</button>
           <button type="button" onClick={onGenerate} disabled={busy || !value.modelId || !selectedModel?.hasApiKey || models.length === 0}>开始生成</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PublishRecordModal({ editor, accounts, busy, onChange, onSaveRecord, onClose }) {
+  function updateRecord(platform, patch) {
+    onChange({
+      ...editor,
+      records: editor.records.map((record) => (
+        record.platform === platform ? { ...record, ...patch } : record
+      ))
+    });
+  }
+
+  return (
+    <div className="modalBackdrop">
+      <div className="mediaAccountModal publishRecordModal">
+        <div className="modalHeader">
+          <div>
+            <h2>平台发布状态</h2>
+            <p>{editor.title}</p>
+          </div>
+          <button className="iconButton" onClick={onClose} disabled={busy}>×</button>
+        </div>
+        <div className="publishRecordList">
+          {editor.records.map((record) => {
+            const platformAccounts = accounts.filter((account) => account.platform === record.platform);
+            return (
+              <section className="publishRecordItem" key={record.platform}>
+                <div className="publishRecordHead">
+                  <strong>{publishPlatformLabel(record.platform)}</strong>
+                  <small>同一平台仅保留一个账号发布记录</small>
+                </div>
+                <div className="splitInputs">
+                  <label>
+                    账号
+                    <select value={record.accountId} onChange={(event) => updateRecord(record.platform, { accountId: event.target.value })} disabled={busy}>
+                      <option value="">不指定账号</option>
+                      {platformAccounts.map((account) => (
+                        <option key={account.id} value={account.id}>{account.nickname || account.platformUserId || account.id}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    状态
+                    <PublishStatusSelect
+                      value={record.status}
+                      onChange={(status) => updateRecord(record.platform, { status })}
+                      disabled={busy}
+                    />
+                  </label>
+                </div>
+                <div className="splitInputs">
+                  <label>
+                    发布时间
+                    <input type="datetime-local" value={toDatetimeLocal(record.publishedAt)} onChange={(event) => updateRecord(record.platform, { publishedAt: fromDatetimeLocal(event.target.value) })} disabled={busy} />
+                  </label>
+                  <label>
+                    发布链接
+                    <input value={record.publishUrl} onChange={(event) => updateRecord(record.platform, { publishUrl: event.target.value })} disabled={busy} />
+                  </label>
+                </div>
+                <label>
+                  失败原因 / 备注
+                  <input value={record.errorMessage} onChange={(event) => updateRecord(record.platform, { errorMessage: event.target.value })} disabled={busy} />
+                </label>
+                <div className="modalActions inlineActions">
+                  <button type="button" onClick={() => onSaveRecord(record)} disabled={busy}>保存{publishPlatformLabel(record.platform)}</button>
+                </div>
+              </section>
+            );
+          })}
+        </div>
+        <div className="modalActions">
+          <button type="button" onClick={onClose} disabled={busy}>关闭</button>
         </div>
       </div>
     </div>
@@ -2877,14 +2970,14 @@ function PublishStatusSelect({ value, onChange, disabled = false }) {
       onMouseDown={(event) => event.stopPropagation()}
       onChange={(event) => onChange(event.target.value)}
     >
-      {localWorkPublishStatuses.map((status) => (
+      {platformPublishStatuses.map((status) => (
         <option key={status} value={status}>{status}</option>
       ))}
     </select>
   );
 }
 
-function LocalWorkChildrenModal({ work, selectedChild, onSelectChild, onChildStatusChange, onBack, onClose }) {
+function LocalWorkChildrenModal({ work, selectedChild, onSelectChild, onEditPublishRecords, onBack, onClose }) {
   return (
     <div className="modalBackdrop">
       <div className="mediaAccountModal localChildrenModal">
@@ -2898,11 +2991,8 @@ function LocalWorkChildrenModal({ work, selectedChild, onSelectChild, onChildSta
         {selectedChild ? (
           <>
             <div className="modalInlineActions">
-              <span>发布状态</span>
-              <PublishStatusSelect
-                value={selectedChild.publishStatus}
-                onChange={(nextStatus) => onChildStatusChange(selectedChild, nextStatus)}
-              />
+              <span>平台发布：{publishSummaryText(selectedChild.publishRecords)}</span>
+              <button type="button" onClick={() => onEditPublishRecords(selectedChild)}>编辑平台状态</button>
             </div>
             <LocalWorkPostPreview item={selectedChild} />
           </>
@@ -2920,10 +3010,12 @@ function LocalWorkChildrenModal({ work, selectedChild, onSelectChild, onChildSta
                   <p>{child.content || `子作品目录：${child.variantName}`}</p>
                   <span>
                     <small>{child.platform}</small>
-                    <PublishStatusSelect
-                      value={child.publishStatus}
-                      onChange={(nextStatus) => onChildStatusChange(child, nextStatus)}
-                    />
+                    <button type="button" className="linkButton" onClick={(event) => {
+                      event.stopPropagation();
+                      onEditPublishRecords(child);
+                    }}>
+                      {publishSummaryText(child.publishRecords)}
+                    </button>
                   </span>
                 </div>
               </button>
@@ -2939,7 +3031,7 @@ function LocalWorkChildrenModal({ work, selectedChild, onSelectChild, onChildSta
   );
 }
 
-function LocalWorkPreviewModal({ title, subtitle, item, onClose }) {
+function LocalWorkPreviewModal({ title, subtitle, item, onEditPublishRecords, onClose }) {
   return (
     <div className="modalBackdrop">
       <div className="mediaAccountModal localChildrenModal">
@@ -2952,6 +3044,7 @@ function LocalWorkPreviewModal({ title, subtitle, item, onClose }) {
         </div>
         <LocalWorkPostPreview item={item} />
         <div className="modalActions">
+          <button type="button" className="secondaryButton" onClick={onEditPublishRecords}>编辑平台状态</button>
           <button type="button" onClick={onClose}>关闭</button>
         </div>
       </div>
@@ -3004,7 +3097,7 @@ function LocalWorkPostPreview({ item }) {
       <article className="xhsPostBody">
         <div className="promptTagList">
           <small>{item.platform}</small>
-          <small className={statusClassName(item.publishStatus)}>{item.publishStatus}</small>
+          <small className={statusClassName(publishSummaryText(item.publishRecords))}>{publishSummaryText(item.publishRecords)}</small>
         </div>
         <h3>{item.title}</h3>
         <p>{item.content || '暂无正文内容'}</p>
@@ -3460,9 +3553,10 @@ function getSiblingBackupDir(folderPath) {
 }
 
 function statusClassName(status) {
-  if (status === '已发布') return 'published';
-  if (status === '部分发布') return 'partial';
+  if (String(status || '').startsWith('已发布')) return 'published';
+  if (status === '部分发布' || status === '待发布' || status === '发布中') return 'partial';
   if (status === '发布失败') return 'failed';
+  if (status === '已下架') return 'failed';
   return 'draft';
 }
 
@@ -3474,12 +3568,55 @@ function mainWorkPreviewItem(work) {
     content: work.content || '',
     tags: work.tags || [],
     publishStatus: work.publishStatus,
+    publishRecords: work.publishRecords || [],
     imagePaths: work.imagePaths || []
   };
 }
 
 function childCopyCount(work) {
   return (work.children || []).filter((child) => child.content).length;
+}
+
+function buildPublishRecordDrafts(records = []) {
+  return localWorkPublishPlatforms.map((platform) => {
+    const existing = records.find((record) => record.platform === platform.value);
+    return {
+      platform: platform.value,
+      accountId: existing?.accountId || '',
+      status: existing?.status || '未发布',
+      publishUrl: existing?.publishUrl || '',
+      platformWorkId: existing?.platformWorkId || '',
+      publishedAt: existing?.publishedAt || '',
+      errorMessage: existing?.errorMessage || ''
+    };
+  });
+}
+
+function publishSummaryText(records = []) {
+  if (!records.length) return '未设置';
+  const activeRecords = records.filter((record) => record.status && record.status !== '未发布');
+  if (!activeRecords.length) return '未发布';
+  const publishedCount = records.filter((record) => record.status === '已发布').length;
+  if (publishedCount > 0) return `已发布 ${publishedCount}/${localWorkPublishPlatforms.length}`;
+  return activeRecords.map((record) => `${publishPlatformLabel(record.platform)} ${record.status}`).slice(0, 2).join('、');
+}
+
+function publishPlatformLabel(platform) {
+  return localWorkPublishPlatforms.find((item) => item.value === platform)?.label || platform;
+}
+
+function toDatetimeLocal(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const pad = (item) => String(item).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function fromDatetimeLocal(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '' : date.toISOString();
 }
 
 function parseTagInput(value) {
