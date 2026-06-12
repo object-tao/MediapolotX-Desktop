@@ -9,6 +9,7 @@ import {
   Image as ImageIcon,
   Library,
   Megaphone,
+  Network,
   PenLine,
   RefreshCw,
   Send,
@@ -45,6 +46,20 @@ const articleLengthOptions = [
   { value: '深度长文', label: '深度长文' },
   { value: '短文', label: '短文' }
 ];
+
+function createDefaultProxyConfig() {
+  return {
+    id: '',
+    name: '',
+    type: 'http',
+    host: '',
+    port: '',
+    username: '',
+    password: '',
+    enabled: true,
+    remark: ''
+  };
+}
 
 const socialPlatformFallbacks = [
   { value: 'xiaohongshu', label: '小红书' },
@@ -106,6 +121,7 @@ const groupedNavItems = [
     shortTitle: '配',
     items: [
       { view: 'aiModelConfig', label: 'AI模型配置', shortLabel: '模', icon: 'G' },
+      { view: 'proxyConfig', label: '代理网络配置', shortLabel: '代', icon: 'N' },
       { view: 'aiParamLibrary', label: 'AI提示词库', shortLabel: '词', icon: 'P' }
     ]
   }
@@ -149,6 +165,7 @@ const navIconByView = {
   wechatMarkdown: FileText,
   articleRewrite: PenLine,
   aiModelConfig: Bot,
+  proxyConfig: Network,
   aiParamLibrary: SlidersHorizontal
 };
 
@@ -275,6 +292,8 @@ function App() {
   const [articleResult, setArticleResult] = useState(null);
   const [socialPlatforms, setSocialPlatforms] = useState(socialPlatformFallbacks);
   const [socialAccounts, setSocialAccounts] = useState([]);
+  const [networkProxies, setNetworkProxies] = useState([]);
+  const [editingProxy, setEditingProxy] = useState(createDefaultProxyConfig());
   const [selectedSocialAccountId, setSelectedSocialAccountId] = useState('');
   const [socialBrowserState, setSocialBrowserState] = useState({ url: '', title: '', canGoBack: false, canGoForward: false });
   const [cookieText, setCookieText] = useState('');
@@ -282,7 +301,7 @@ function App() {
     open: false,
     platform: 'xiaohongshu',
     groupName: '默认分组',
-    proxyMode: 'none',
+    proxyId: '',
     cookieText: '',
     showCookieInput: false
   });
@@ -400,6 +419,11 @@ function App() {
     setSelectedSocialAccountId((current) => current || list[0]?.id || '');
   }, []);
 
+  const refreshNetworkProxies = useCallback(async () => {
+    const list = await window.mediapolotx.proxy.list();
+    setNetworkProxies(list);
+  }, []);
+
   const loadAiStore = useCallback(async () => {
     const store = await window.mediapolotx.aiConfig.get();
     setAiStore(store);
@@ -453,6 +477,7 @@ function App() {
     refreshStorages();
     refreshTasks();
     refreshSocialAccounts();
+    refreshNetworkProxies();
     loadImportedLocalWorks();
 
     const off = window.mediapolotx.scanner.onEvent((event) => {
@@ -472,7 +497,7 @@ function App() {
       offAiProgress();
       offDuplicateProgress();
     };
-  }, [loadAiStore, loadFiles, loadImportedLocalWorks, refreshSocialAccounts, refreshStorages, refreshTasks, selectedStorageId]);
+  }, [loadAiStore, loadFiles, loadImportedLocalWorks, refreshNetworkProxies, refreshSocialAccounts, refreshStorages, refreshTasks, selectedStorageId]);
 
   useEffect(() => {
     if (!['socialAccounts', 'socialWorks', 'oneClickPublish'].includes(activeView)) {
@@ -517,7 +542,7 @@ function App() {
       const account = await window.mediapolotx.social.startLoginAccount({
         platform: addAccountModal.platform,
         groupName: addAccountModal.groupName,
-        proxyMode: addAccountModal.proxyMode
+        proxyId: addAccountModal.proxyId
       });
       await refreshSocialAccounts();
       setSelectedSocialAccountId(account.id);
@@ -540,6 +565,7 @@ function App() {
         platform: addAccountModal.platform,
         nickname: `${platform?.label || '媒体'}账号`,
         groupName: addAccountModal.groupName,
+        proxyId: addAccountModal.proxyId,
         status: 'unknown'
       });
       await window.mediapolotx.social.importCookies({
@@ -571,6 +597,42 @@ function App() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function updateSocialAccountProxy(account, proxyId) {
+    if (!account) return;
+    const saved = await window.mediapolotx.social.saveAccount({ ...account, proxyId });
+    setSocialAccounts((current) => current.map((item) => (item.id === saved.id ? saved : item)));
+    setMessage('账号代理已更新');
+    if (selectedSocialAccountId === saved.id) {
+      await openSocialAccount(saved);
+    }
+  }
+
+  async function saveNetworkProxy(event) {
+    event.preventDefault();
+    if (!editingProxy.host.trim() || !String(editingProxy.port).trim()) {
+      setMessage('请填写代理主机和端口');
+      return;
+    }
+    const saved = await window.mediapolotx.proxy.save({
+      ...editingProxy,
+      port: Number(editingProxy.port)
+    });
+    await refreshNetworkProxies();
+    setEditingProxy(createDefaultProxyConfig());
+    setMessage(`代理已保存：${saved.name}`);
+  }
+
+  async function deleteNetworkProxy(proxyId) {
+    const list = await window.mediapolotx.proxy.delete(proxyId);
+    const linkedAccounts = socialAccounts.filter((account) => account.proxyId === proxyId);
+    for (const account of linkedAccounts) {
+      await window.mediapolotx.social.saveAccount({ ...account, proxyId: '' });
+    }
+    await refreshSocialAccounts();
+    setNetworkProxies(list);
+    setMessage('代理已删除');
   }
 
   async function openSocialAccount(account = selectedSocialAccount, target = 'homeUrl') {
@@ -1106,6 +1168,9 @@ function App() {
       if (view === 'aiModelConfig') {
         await loadAiStore();
       }
+      if (view === 'proxyConfig') {
+        await refreshNetworkProxies();
+      }
     } catch (error) {
       setMessage(`刷新失败：${error.message}`);
     }
@@ -1537,12 +1602,14 @@ function App() {
               <SocialAccountList
                 accounts={socialAccounts}
                 platforms={socialPlatforms}
+                proxies={networkProxies}
                 selectedId={selectedSocialAccountId}
                 onSelect={(account) => {
                   setSelectedSocialAccountId(account.id);
                   openSocialAccount(account);
                 }}
                 onDelete={deleteSocialAccount}
+                onProxyChange={updateSocialAccountProxy}
               />
             </div>
             <div className="panel socialBrowserPanel">
@@ -1570,6 +1637,17 @@ function App() {
               </div>
             </div>
           </section>
+        )}
+
+        {activeView === 'proxyConfig' && (
+          <ProxyConfigView
+            proxies={networkProxies}
+            editingProxy={editingProxy}
+            onEdit={setEditingProxy}
+            onNew={() => setEditingProxy(createDefaultProxyConfig())}
+            onSave={saveNetworkProxy}
+            onDelete={deleteNetworkProxy}
+          />
         )}
 
         {activeView === 'socialWorks' && (
@@ -2169,7 +2247,7 @@ function App() {
           />
         )}
 
-        {!['socialAccounts', 'socialWorks', 'localWorks', 'oneClickPublish', 'aiParamLibrary'].includes(activeView) && (
+        {!['socialAccounts', 'socialWorks', 'localWorks', 'oneClickPublish', 'proxyConfig', 'aiParamLibrary'].includes(activeView) && (
           <FileTable
             files={files}
             selectedFileIds={selectedFileIds}
@@ -2180,11 +2258,12 @@ function App() {
           />
         )}
 
-        {!['sync', 'socialAccounts', 'socialWorks', 'localWorks', 'oneClickPublish', 'aiParamLibrary'].includes(activeView) && <TaskList tasks={tasks} compact onOpenPath={openPath} />}
+        {!['sync', 'socialAccounts', 'socialWorks', 'localWorks', 'oneClickPublish', 'proxyConfig', 'aiParamLibrary'].includes(activeView) && <TaskList tasks={tasks} compact onOpenPath={openPath} />}
         {addAccountModal.open && (
           <AddMediaAccountModal
             modal={addAccountModal}
             platforms={mediaPlatformCards}
+            proxies={networkProxies}
             busy={busy}
             onChange={setAddAccountModal}
             onClose={() => setAddAccountModal((current) => ({ ...current, open: false }))}
@@ -2481,6 +2560,81 @@ function WorkPathModal({ value, onChange, onChoose, onSave, onClose }) {
         </div>
       </div>
     </div>
+  );
+}
+
+function ProxyConfigView({ proxies, editingProxy, onEdit, onNew, onSave, onDelete }) {
+  return (
+    <section className="contentGrid">
+      <div className="panel">
+        <div className="panelHeader">
+          <h2>代理网络列表</h2>
+          <button type="button" onClick={onNew}>新增代理</button>
+        </div>
+        <div className="modelList">
+          {proxies.map((proxy) => (
+            <button
+              type="button"
+              key={proxy.id}
+              className={`modelItem ${editingProxy.id === proxy.id ? 'selected' : ''}`}
+              onClick={() => onEdit({ ...proxy, port: String(proxy.port || '') })}
+            >
+              <span>
+                <strong>{proxy.name}</strong>
+                <small>{proxy.type}://{proxy.host}:{proxy.port}</small>
+                {proxy.username && <small>认证用户：{proxy.username}</small>}
+              </span>
+              <em>{proxy.enabled ? '启用' : '停用'}</em>
+              {proxy.remark && <div className="modelBadges"><small>{proxy.remark}</small></div>}
+            </button>
+          ))}
+          {proxies.length === 0 && <div className="empty">暂无代理。新增后可绑定到媒体账号。</div>}
+        </div>
+      </div>
+      <form className="panel form" onSubmit={onSave}>
+        <div className="panelHeader">
+          <h2>{editingProxy.id ? '编辑代理' : '新增代理'}</h2>
+          {editingProxy.id && <button type="button" className="dangerButton" onClick={() => onDelete(editingProxy.id)}>删除</button>}
+        </div>
+        <label>
+          代理名称
+          <input value={editingProxy.name} onChange={(event) => onEdit({ ...editingProxy, name: event.target.value })} placeholder="例如 小红书账号A代理" />
+        </label>
+        <label>
+          协议类型
+          <select value={editingProxy.type} onChange={(event) => onEdit({ ...editingProxy, type: event.target.value })}>
+            <option value="http">HTTP</option>
+            <option value="https">HTTPS</option>
+            <option value="socks5">SOCKS5</option>
+          </select>
+        </label>
+        <label>
+          主机/IP
+          <input value={editingProxy.host} onChange={(event) => onEdit({ ...editingProxy, host: event.target.value })} placeholder="127.0.0.1 或 proxy.example.com" />
+        </label>
+        <label>
+          端口
+          <input type="number" min="1" max="65535" value={editingProxy.port} onChange={(event) => onEdit({ ...editingProxy, port: event.target.value })} />
+        </label>
+        <label>
+          用户名
+          <input value={editingProxy.username} onChange={(event) => onEdit({ ...editingProxy, username: event.target.value })} placeholder="无认证可留空" />
+        </label>
+        <label>
+          密码
+          <input type="password" value={editingProxy.password} onChange={(event) => onEdit({ ...editingProxy, password: event.target.value })} placeholder="无认证可留空" />
+        </label>
+        <label className="checkboxLine">
+          <input type="checkbox" checked={editingProxy.enabled} onChange={(event) => onEdit({ ...editingProxy, enabled: event.target.checked })} />
+          启用代理
+        </label>
+        <label>
+          备注
+          <textarea value={editingProxy.remark} onChange={(event) => onEdit({ ...editingProxy, remark: event.target.value })} />
+        </label>
+        <button type="submit">保存代理</button>
+      </form>
+    </section>
   );
 }
 
@@ -2792,7 +2946,7 @@ function formatAiDetectionSummary(file) {
   return '频域分析未发现明显平台 AI 风险';
 }
 
-function SocialAccountList({ accounts, platforms, selectedId, onSelect, onDelete }) {
+function SocialAccountList({ accounts, platforms, proxies, selectedId, onSelect, onDelete, onProxyChange }) {
   const groups = accounts.reduce((map, account) => {
     const groupName = account.groupName || '默认分组';
     if (!map.has(groupName)) map.set(groupName, []);
@@ -2806,23 +2960,36 @@ function SocialAccountList({ accounts, platforms, selectedId, onSelect, onDelete
         <div key={groupName} className="socialGroup">
           <strong>{groupName} ({groupAccounts.length})</strong>
           {groupAccounts.map((account) => (
-            <button
-              type="button"
+            <div
+              role="button"
+              tabIndex={0}
               key={account.id}
               className={`socialAccountItem ${selectedId === account.id ? 'selected' : ''}`}
               onClick={() => onSelect(account)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') onSelect(account);
+              }}
             >
               <span className="socialAvatar">{account.avatarUrl ? <img src={account.avatarUrl} alt="" /> : platformLabel(platforms, account.platform).slice(0, 1)}</span>
               <span>
                 <strong>{account.nickname}</strong>
                 <small>{platformLabel(platforms, account.platform)} {account.platformUserId || ''}</small>
+                <label className="inlineSelect" onClick={(event) => event.stopPropagation()}>
+                  代理
+                  <select value={account.proxyId || ''} onChange={(event) => onProxyChange(account, event.target.value)}>
+                    <option value="">不使用</option>
+                    {proxies.map((proxy) => (
+                      <option key={proxy.id} value={proxy.id}>{proxy.name}</option>
+                    ))}
+                  </select>
+                </label>
                 {account.remark && <small>{account.remark}</small>}
               </span>
-              <em onClick={(event) => {
+              <button type="button" className="dangerButton" onClick={(event) => {
                 event.stopPropagation();
                 onDelete(account.id);
-              }}>删除</em>
-            </button>
+              }}>删除</button>
+            </div>
           ))}
         </div>
       ))}
@@ -2831,7 +2998,7 @@ function SocialAccountList({ accounts, platforms, selectedId, onSelect, onDelete
   );
 }
 
-function AddMediaAccountModal({ modal, platforms, busy, onChange, onClose, onLoginAdd, onCookieAdd }) {
+function AddMediaAccountModal({ modal, platforms, proxies, busy, onChange, onClose, onLoginAdd, onCookieAdd }) {
   const selectedPlatform = platforms.find((platform) => platform.value === modal.platform);
 
   return (
@@ -2865,10 +3032,13 @@ function AddMediaAccountModal({ modal, platforms, busy, onChange, onClose, onLog
         </section>
         <section className="modalSection">
           <h3>使用代理IP</h3>
-          <select value={modal.proxyMode} onChange={(event) => onChange((current) => ({ ...current, proxyMode: event.target.value }))}>
-            <option value="none">不使用</option>
+          <select value={modal.proxyId} onChange={(event) => onChange((current) => ({ ...current, proxyId: event.target.value }))}>
+            <option value="">不使用</option>
+            {proxies.map((proxy) => (
+              <option key={proxy.id} value={proxy.id}>{proxy.name} / {proxy.type}://{proxy.host}:{proxy.port}</option>
+            ))}
           </select>
-          <small>代理服务器管理后续在设置中补充。</small>
+          <small>可在“基础配置 / 代理网络配置”中维护代理。</small>
         </section>
         {modal.showCookieInput && (
           <section className="modalSection">
@@ -2997,6 +3167,7 @@ function viewTitle(activeView) {
   if (activeView === 'wechatMarkdown') return '公众号转MD';
   if (activeView === 'articleRewrite') return '文章重写';
   if (activeView === 'aiModelConfig') return 'AI模型配置';
+  if (activeView === 'proxyConfig') return '代理网络配置';
   if (activeView === 'aiParamLibrary') return 'AI提示词库';
   return '本地素材库';
 }
@@ -3014,6 +3185,7 @@ function viewSubtitle(activeView) {
   if (activeView === 'wechatMarkdown') return '下载微信公众号文章并保存为 Markdown 文件。';
   if (activeView === 'articleRewrite') return '导入资讯、公告或同行文章，调用 AI 深度重写并保存 Markdown。';
   if (activeView === 'aiModelConfig') return '集中管理后续 AI 功能共用的模型、密钥和连接参数。';
+  if (activeView === 'proxyConfig') return '维护账号独立使用的 HTTP、HTTPS 或 SOCKS5 网络代理。';
   if (activeView === 'aiParamLibrary') return '管理 AI 功能常用提示词模板，便于后续批量复用。';
   return '管理本机目录、移动硬盘和 NAS，建立本地 SQLite 索引。';
 }

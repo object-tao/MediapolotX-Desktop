@@ -15,6 +15,7 @@ const articleRewriter = require('../modules/articleRewriter');
 const localWorkImporter = require('../modules/localWorkImporter');
 const { createAiConfigManager } = require('../modules/aiConfigManager');
 const { createSocialAccountManager } = require('../modules/socialAccountManager');
+const { createProxyManager } = require('../modules/proxyManager');
 const { createLogger } = require('../utils/logger');
 
 let mainWindow;
@@ -25,6 +26,7 @@ let taskManager;
 let settingsManager;
 let aiConfigManager;
 let socialAccountManager;
+let proxyManager;
 let logger;
 const watchers = new Map();
 const socialBrowserViews = new Map();
@@ -70,6 +72,7 @@ async function bootstrapServices() {
   settingsManager = createSettingsManager(db);
   aiConfigManager = createAiConfigManager(settingsManager, safeStorage);
   socialAccountManager = createSocialAccountManager(settingsManager);
+  proxyManager = createProxyManager(settingsManager);
 }
 
 function registerIpc() {
@@ -249,6 +252,7 @@ function registerIpc() {
     const account = socialAccountManager.getAccount(payload.accountId);
     if (!account) throw new Error('账号不存在');
     const platform = socialAccountManager.getPlatform(account.platform);
+    await applyAccountProxy(account);
     const view = getSocialBrowserView(account.id);
     activeSocialViewId = account.id;
     mainWindow.setBrowserView(view);
@@ -261,6 +265,7 @@ function registerIpc() {
     const account = socialAccountManager.getAccount(payload.accountId);
     if (!account) throw new Error('账号不存在');
     const platform = socialAccountManager.getPlatform(account.platform);
+    await applyAccountProxy(account);
     const view = getSocialBrowserView(account.id);
     const targetUrl = platform[payload.target] || payload.url || platform.homeUrl;
     activeSocialViewId = account.id;
@@ -312,6 +317,12 @@ function registerIpc() {
     const view = getSocialBrowserView(payload.accountId);
     return view.webContents.executeJavaScript(buildPublishFillScript(payload.form || {}), true);
   });
+
+  ipcMain.handle('proxy:list', () => proxyManager.listProxies());
+
+  ipcMain.handle('proxy:save', (_event, payload) => proxyManager.saveProxy(payload));
+
+  ipcMain.handle('proxy:delete', (_event, proxyId) => proxyManager.deleteProxy(proxyId));
 
   ipcMain.handle('settings:getAll', () => settingsManager.all());
 
@@ -438,6 +449,8 @@ async function startSocialLoginAccount(payload = {}) {
   const platform = socialAccountManager.getPlatform(platformKey);
   const accountId = payload.accountId || `login-${Date.now()}`;
   const partition = getSocialPartition(accountId);
+  const accountSession = session.fromPartition(partition);
+  await applySessionProxy(accountSession, proxyManager.getProxy(payload.proxyId));
   const loginWindow = new BrowserWindow({
     width: 1180,
     height: 760,
@@ -473,6 +486,7 @@ async function startSocialLoginAccount(payload = {}) {
       avatarUrl: profile.avatarUrl || '',
       groupName: payload.groupName || '默认分组',
       remark: payload.remark || '',
+      proxyId: payload.proxyId || '',
       status: 'online'
     });
     if (!loginWindow.isDestroyed()) loginWindow.close();
@@ -512,6 +526,29 @@ async function startSocialLoginAccount(payload = {}) {
 
 function getSocialPartition(accountId) {
   return `persist:social-account-${accountId}`;
+}
+
+async function applyAccountProxy(account) {
+  const accountSession = session.fromPartition(getSocialPartition(account.id));
+  await applySessionProxy(accountSession, proxyManager.getProxy(account.proxyId));
+}
+
+async function applySessionProxy(accountSession, proxy) {
+  accountSession.removeAllListeners('login');
+  if (!proxy || !proxy.enabled || !proxy.host || !proxy.port) {
+    await accountSession.setProxy({ mode: 'direct' });
+    return;
+  }
+  accountSession.on('login', (_event, _webContents, _request, authInfo, callback) => {
+    if (authInfo.isProxy && proxy.username) {
+      callback(proxy.username, proxy.password || '');
+    } else {
+      callback();
+    }
+  });
+  await accountSession.setProxy({
+    proxyRules: `${proxy.type}://${proxy.host}:${proxy.port}`
+  });
 }
 
 function applySocialBrowserBounds(bounds = {}) {

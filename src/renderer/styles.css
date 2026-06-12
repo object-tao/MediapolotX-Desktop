@@ -450,6 +450,22 @@ nav {
   font-size: 12px;
 }
 
+.inlineSelect {
+  margin-top: 6px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  color: #667386;
+  font-size: 12px;
+}
+
+.inlineSelect select {
+  padding: 5px 8px;
+  min-height: 30px;
+  font-size: 12px;
+}
+
 .socialAvatar {
   width: 36px;
   height: 36px;

@@ -79,6 +79,11 @@ contextBridge.exposeInMainWorld('mediapolotx', {
     getAll: () => ipcRenderer.invoke('settings:getAll'),
     set: (payload) => ipcRenderer.invoke('settings:set', payload)
   },
+  proxy: {
+    list: () => ipcRenderer.invoke('proxy:list'),
+    save: (payload) => ipcRenderer.invoke('proxy:save', payload),
+    delete: (proxyId) => ipcRenderer.invoke('proxy:delete', proxyId)
+  },
   aiConfig: {
     get: () => ipcRenderer.invoke('aiConfig:get'),
     saveModel: (payload) => ipcRenderer.invoke('aiConfig:saveModel', payload),

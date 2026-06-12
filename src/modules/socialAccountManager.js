@@ -86,6 +86,7 @@ function normalizeAccount(account = {}) {
     groupName: account.groupName || '默认分组',
     remark: account.remark || '',
     avatarUrl: account.avatarUrl || '',
+    proxyId: account.proxyId || '',
     status: account.status || 'unknown',
     createdAt: account.createdAt || now,
     updatedAt: now
