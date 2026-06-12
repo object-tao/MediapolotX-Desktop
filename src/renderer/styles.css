@@ -795,7 +795,7 @@ textarea {
 
 .localWorkRow {
   display: grid;
-  grid-template-columns: 64px 76px minmax(180px, 1.1fr) minmax(220px, 1.3fr) 110px 110px minmax(150px, auto);
+  grid-template-columns: 64px 76px minmax(160px, 1fr) minmax(160px, 0.8fr) minmax(220px, 1.2fr) 110px 110px minmax(150px, auto);
   gap: 12px;
   align-items: center;
   padding: 11px 12px;
@@ -834,6 +834,21 @@ textarea {
   text-overflow: ellipsis;
   white-space: nowrap;
   text-align: left;
+}
+
+.localWorkTags {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.localWorkTags small {
+  border-radius: 999px;
+  padding: 3px 8px;
+  background: #eef2f7;
+  color: #536173;
+  font-size: 12px;
 }
 
 .rowActions {

@@ -303,6 +303,8 @@ function App() {
   const [localWorksList, setLocalWorksList] = useState([]);
   const [localWorksImportPath, setLocalWorksImportPath] = useState('');
   const [localWorksMode, setLocalWorksMode] = useState('imported');
+  const [localWorkTagFilter, setLocalWorkTagFilter] = useState('all');
+  const [localWorkTagEditor, setLocalWorkTagEditor] = useState(null);
   const [workPathModalOpen, setWorkPathModalOpen] = useState(false);
   const [workPathDraft, setWorkPathDraft] = useState('');
   const [selectedLocalWork, setSelectedLocalWork] = useState(null);
@@ -347,6 +349,21 @@ function App() {
     const start = (normalizedPage - 1) * promptPageSize;
     return filteredPrompts.slice(start, start + promptPageSize);
   }, [filteredPrompts, promptPage, promptPageCount]);
+  const localWorkTags = useMemo(
+    () => Array.from(new Set(localWorksList.flatMap((work) => work.tags || []))).sort((a, b) => a.localeCompare(b, 'zh-Hans-CN')),
+    [localWorksList]
+  );
+  const filteredLocalWorks = useMemo(() => (
+    localWorkTagFilter === 'all'
+      ? localWorksList
+      : localWorksList.filter((work) => (work.tags || []).includes(localWorkTagFilter))
+  ), [localWorkTagFilter, localWorksList]);
+
+  useEffect(() => {
+    if (localWorkTagFilter !== 'all' && !localWorkTags.includes(localWorkTagFilter)) {
+      setLocalWorkTagFilter('all');
+    }
+  }, [localWorkTagFilter, localWorkTags]);
 
   const loadFiles = useCallback(async (storageId = selectedStorageId) => {
     if (!storageId) return;
@@ -1133,7 +1150,11 @@ function App() {
       setMessage('正在导入本地作品...');
       const result = await window.mediapolotx.localWorks.importScannedWorks({
         sourceRoot: localWorksImportPath,
-        targetRoot: localWorksPath
+        targetRoot: localWorksPath,
+        works: localWorksList.map((work) => ({
+          folderName: work.folderName,
+          tags: work.tags || []
+        }))
       });
       setLocalWorksList(result.works);
       setLocalWorksMode('imported');
@@ -1146,6 +1167,32 @@ function App() {
     } finally {
       setBusy(false);
     }
+  }
+
+  function openLocalWorkTagEditor(work) {
+    setLocalWorkTagEditor({
+      workId: work.id,
+      title: work.title,
+      value: (work.tags || []).join('，')
+    });
+  }
+
+  async function saveLocalWorkTags() {
+    if (!localWorkTagEditor) return;
+    const tags = parseTagInput(localWorkTagEditor.value);
+    setLocalWorksList((current) => current.map((work) => (
+      work.id === localWorkTagEditor.workId ? { ...work, tags } : work
+    )));
+    if (localWorksMode === 'imported') {
+      const works = await window.mediapolotx.localWorks.updateTags({
+        workId: localWorkTagEditor.workId,
+        tags
+      });
+      setLocalWorksList(works);
+    }
+    setLocalWorkTagFilter((current) => (current !== 'all' && !tags.includes(current) ? 'all' : current));
+    setLocalWorkTagEditor(null);
+    setMessage('标签已保存');
   }
 
   async function runTask(taskRunner) {
@@ -1247,8 +1294,20 @@ function App() {
             <p>{viewSubtitle(activeView)}</p>
           </div>
           <div className="actions">
-            <button onClick={scanSelectedStorage} disabled={!selectedStorage || busy}>扫描</button>
-            <button onClick={watchSelectedStorage} disabled={!selectedStorage}>监听</button>
+            {activeView === 'localWorks' ? (
+              <>
+                <button type="button" onClick={openWorkPathModal}>设置作品路径</button>
+                <button type="button" onClick={importLocalWorksDirectory} disabled={busy}>选择目录导入</button>
+                {localWorksMode === 'scanned' && localWorksList.length > 0 && (
+                  <button type="button" onClick={confirmImportLocalWorks} disabled={busy}>确认导入</button>
+                )}
+              </>
+            ) : (
+              <>
+                <button onClick={scanSelectedStorage} disabled={!selectedStorage || busy}>扫描</button>
+                <button onClick={watchSelectedStorage} disabled={!selectedStorage}>监听</button>
+              </>
+            )}
           </div>
         </header>
 
@@ -1508,14 +1567,14 @@ function App() {
 
         {activeView === 'localWorks' && (
           <LocalWorksView
-            works={localWorksList}
+            works={filteredLocalWorks}
             worksPath={localWorksPath}
             importPath={localWorksImportPath}
-            mode={localWorksMode}
             busy={busy}
-            onSetPath={openWorkPathModal}
-            onImportDirectory={importLocalWorksDirectory}
-            onConfirmImport={confirmImportLocalWorks}
+            tagOptions={localWorkTags}
+            tagFilter={localWorkTagFilter}
+            onTagFilterChange={setLocalWorkTagFilter}
+            onEditTags={openLocalWorkTagEditor}
             onOpenMainWork={setSelectedMainWork}
             onOpenPath={openPath}
             onOpenChildren={(work) => {
@@ -2106,6 +2165,14 @@ function App() {
             onClose={() => setSelectedMainWork(null)}
           />
         )}
+        {localWorkTagEditor && (
+          <LocalWorkTagModal
+            editor={localWorkTagEditor}
+            onChange={setLocalWorkTagEditor}
+            onSave={saveLocalWorkTags}
+            onClose={() => setLocalWorkTagEditor(null)}
+          />
+        )}
         {selectedPrompt && (
           <PromptDetailModal
             prompt={selectedPrompt}
@@ -2224,11 +2291,11 @@ function LocalWorksView({
   works,
   worksPath,
   importPath,
-  mode,
   busy,
-  onSetPath,
-  onImportDirectory,
-  onConfirmImport,
+  tagOptions,
+  tagFilter,
+  onTagFilterChange,
+  onEditTags,
   onOpenMainWork,
   onOpenPath,
   onOpenChildren
@@ -2248,13 +2315,12 @@ function LocalWorksView({
           <span>作品存放路径：{worksPath || '尚未设置'}{importPath ? `；当前导入来源：${importPath}` : ''}</span>
         </div>
         <div className="tableActions">
-          <button type="button" onClick={onSetPath}>设置作品路径</button>
-          <button type="button" onClick={onImportDirectory} disabled={busy}>选择目录导入</button>
-          {mode === 'scanned' && works.length > 0 && (
-            <button type="button" className="primaryButton" onClick={onConfirmImport} disabled={busy}>
-              确认导入
-            </button>
-          )}
+          <select value={tagFilter} onChange={(event) => onTagFilterChange(event.target.value)} disabled={busy}>
+            <option value="all">全部标签</option>
+            {tagOptions.map((tag) => (
+              <option key={tag} value={tag}>{tag}</option>
+            ))}
+          </select>
         </div>
       </div>
       {works.length > 0 ? (
@@ -2263,6 +2329,7 @@ function LocalWorksView({
             <span>序号</span>
             <span>图片数</span>
             <span>标题</span>
+            <span>标签</span>
             <span>MD文件</span>
             <span>子作品数量</span>
             <span>发布状态</span>
@@ -2276,6 +2343,10 @@ function LocalWorksView({
                 <button type="button" className="linkButton titleLink" onClick={() => onOpenMainWork(work)}>
                   {work.title}
                 </button>
+              </span>
+              <span className="localWorkTags">
+                {(work.tags || []).length > 0 ? (work.tags || []).map((tag) => <small key={tag}>{tag}</small>) : <small>未设置</small>}
+                <button type="button" className="linkButton" onClick={() => onEditTags(work)}>编辑</button>
               </span>
               <span title={workMdPath(work)}>{workMdPath(work)}</span>
               <span>
@@ -2388,6 +2459,36 @@ function LocalWorkPreviewModal({ title, subtitle, item, onClose }) {
         <LocalWorkPostPreview item={item} />
         <div className="modalActions">
           <button type="button" onClick={onClose}>关闭</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LocalWorkTagModal({ editor, onChange, onSave, onClose }) {
+  return (
+    <div className="modalBackdrop">
+      <div className="mediaAccountModal workPathModal">
+        <div className="modalHeader">
+          <div>
+            <h2>编辑作品标签</h2>
+            <p>{editor.title}</p>
+          </div>
+          <button className="iconButton" onClick={onClose}>×</button>
+        </div>
+        <div className="modalSection">
+          <label>
+            标签
+            <input
+              value={editor.value}
+              onChange={(event) => onChange({ ...editor, value: event.target.value })}
+              placeholder="多个标签用逗号、顿号或空格分隔"
+            />
+          </label>
+        </div>
+        <div className="modalActions">
+          <button type="button" className="secondaryButton" onClick={onClose}>取消</button>
+          <button type="button" onClick={onSave}>保存</button>
         </div>
       </div>
     </div>
@@ -2863,6 +2964,15 @@ function mainWorkPreviewItem(work) {
     publishStatus: work.publishStatus,
     imagePaths: work.imagePaths || []
   };
+}
+
+function parseTagInput(value) {
+  return Array.from(new Set(
+    String(value || '')
+      .split(/[\s,，、;；]+/)
+      .map((item) => item.trim())
+      .filter(Boolean)
+  ));
 }
 
 function formatBytes(bytes) {

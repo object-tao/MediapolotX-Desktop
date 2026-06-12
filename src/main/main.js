@@ -119,6 +119,10 @@ function registerIpc() {
     localWorkImporter.listImportedWorks(db)
   ));
 
+  ipcMain.handle('localWorks:updateTags', async (_event, payload) => (
+    localWorkImporter.updateWorkTags(db, payload)
+  ));
+
   ipcMain.handle('storage:add', (_event, payload) => {
     const storage = storageManager.addStorage(payload.name, payload.type, payload.basePath);
     return storage;

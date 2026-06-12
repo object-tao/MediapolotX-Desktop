@@ -85,6 +85,7 @@ async function scanLocalWorks(rootPath) {
       folderPath,
       mdFile: findFirstMarkdown(folderPath, entries),
       imagePaths: await scanImages(folderPath, entries),
+      tags: [],
       publishStatus: '未发布',
       children: []
     };
@@ -158,24 +159,30 @@ function listImportedWorks(db) {
     folderPath: row.folder_path,
     mdFile: row.md_file || '',
     imagePaths: parseImagePaths(row.image_paths),
+    tags: JSON.parse(row.tags || '[]'),
     publishStatus: row.publish_status,
     children: childMap.get(row.id) || []
   }));
 }
 
-async function importScannedWorks(db, { sourceRoot, targetRoot }) {
+async function importScannedWorks(db, { sourceRoot, targetRoot, works = [] }) {
   if (!sourceRoot) throw new Error('请先选择目录导入并完成扫描');
   if (!targetRoot) throw new Error('请先设置作品路径');
 
   await fs.mkdir(targetRoot, { recursive: true });
   const scanned = await scanLocalWorks(sourceRoot);
+  const tagMap = new Map(
+    works
+      .filter((work) => work && work.folderName)
+      .map((work) => [work.folderName, Array.isArray(work.tags) ? work.tags : []])
+  );
   const now = nowIso();
 
   const insertWork = db.prepare(`
     INSERT OR REPLACE INTO local_works (
-      id, title, folder_name, folder_path, md_file, image_paths, publish_status, source_root, created_at, updated_at
+      id, title, folder_name, folder_path, md_file, image_paths, tags, publish_status, source_root, created_at, updated_at
     ) VALUES (
-      @id, @title, @folderName, @folderPath, @mdFile, @imagePaths, @publishStatus, @sourceRoot, @createdAt, @updatedAt
+      @id, @title, @folderName, @folderPath, @mdFile, @imagePaths, @tags, @publishStatus, @sourceRoot, @createdAt, @updatedAt
     )
   `);
   const deleteChildren = db.prepare('DELETE FROM local_work_children WHERE parent_id = @parentId');
@@ -203,6 +210,7 @@ async function importScannedWorks(db, { sourceRoot, targetRoot }) {
       folderPath: destinationPath,
       mdFile: findFirstMarkdown(destinationPath, copiedEntries),
       imagePaths: await scanImages(destinationPath, copiedEntries),
+      tags: tagMap.get(sourceWork.folderName) || sourceWork.tags || [],
       publishStatus: '未发布'
     };
 
@@ -213,6 +221,7 @@ async function importScannedWorks(db, { sourceRoot, targetRoot }) {
       folderPath: importedWork.folderPath,
       mdFile: importedWork.mdFile,
       imagePaths: JSON.stringify(importedWork.imagePaths),
+      tags: JSON.stringify(importedWork.tags),
       publishStatus: importedWork.publishStatus,
       sourceRoot,
       createdAt: now,
@@ -246,8 +255,22 @@ async function importScannedWorks(db, { sourceRoot, targetRoot }) {
   };
 }
 
+function updateWorkTags(db, { workId, tags }) {
+  db.prepare(`
+    UPDATE local_works
+    SET tags = @tags, updated_at = @updatedAt
+    WHERE id = @workId
+  `).run({
+    workId,
+    tags: JSON.stringify(Array.isArray(tags) ? tags : []),
+    updatedAt: nowIso()
+  });
+  return listImportedWorks(db);
+}
+
 module.exports = {
   scanLocalWorks,
   importScannedWorks,
-  listImportedWorks
+  listImportedWorks,
+  updateWorkTags
 };
