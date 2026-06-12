@@ -1411,7 +1411,7 @@ function App() {
       });
       setLocalWorksList(result.works);
       const updatedWork = result.works.find((work) => work.id === copywriterModal.work.id);
-      setSelectedMainWork((current) => (current?.id === updatedWork?.id ? updatedWork : current));
+      if (updatedWork) setSelectedMainWork(updatedWork);
       setSelectedLocalWork((current) => (current?.id === updatedWork?.id ? updatedWork : current));
       setSelectedChildWork((current) => {
         if (!current || !updatedWork) return current;
@@ -2613,6 +2613,7 @@ function LocalWorksView({
           <div className="localWorkRow head">
             <span>序号</span>
             <span>图片数</span>
+            <span>文案</span>
             <span>标题</span>
             <span>标签</span>
             <span>子作品数量</span>
@@ -2623,6 +2624,14 @@ function LocalWorksView({
             <div className="localWorkRow" key={work.id}>
               <span>{work.serialNo}</span>
               <span>{work.imagePaths?.length || 0} 张</span>
+              <span className="copyStatusCell">
+                <small className={work.content ? 'copyReady' : 'copyMissing'}>{work.content ? '主已生成' : '主未生成'}</small>
+                {work.children.length > 0 && (
+                  <small className={childCopyCount(work) === work.children.length ? 'copyReady' : 'copyMissing'}>
+                    子 {childCopyCount(work)}/{work.children.length}
+                  </small>
+                )}
+              </span>
               <span title={work.title}>
                 <button type="button" className="linkButton titleLink" onClick={() => onOpenMainWork(work)}>
                   {work.title}
@@ -3467,6 +3476,10 @@ function mainWorkPreviewItem(work) {
     publishStatus: work.publishStatus,
     imagePaths: work.imagePaths || []
   };
+}
+
+function childCopyCount(work) {
+  return (work.children || []).filter((child) => child.content).length;
 }
 
 function parseTagInput(value) {

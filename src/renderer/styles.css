@@ -811,7 +811,7 @@ textarea {
 
 .localWorkRow {
   display: grid;
-  grid-template-columns: 64px 76px minmax(220px, 1.4fr) minmax(220px, 1fr) 110px 110px minmax(220px, auto);
+  grid-template-columns: 64px 76px 120px minmax(220px, 1.4fr) minmax(180px, 1fr) 110px 110px minmax(220px, auto);
   gap: 12px;
   align-items: center;
   padding: 11px 12px;
@@ -865,6 +865,28 @@ textarea {
   background: #eef2f7;
   color: #536173;
   font-size: 12px;
+}
+
+.copyStatusCell {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.copyStatusCell small {
+  border-radius: 999px;
+  padding: 3px 7px;
+  font-size: 12px;
+}
+
+.copyReady {
+  background: #dbf4e9;
+  color: #176642;
+}
+
+.copyMissing {
+  background: #eef2f7;
+  color: #64748b;
 }
 
 .mutedText {
