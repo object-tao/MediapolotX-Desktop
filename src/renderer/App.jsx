@@ -377,6 +377,12 @@ function App() {
     });
   }, []);
 
+  const loadImportedLocalWorks = useCallback(async () => {
+    const works = await window.mediapolotx.localWorks.listImported();
+    setLocalWorksList(works);
+    setLocalWorksMode('imported');
+  }, []);
+
   const getSocialBrowserBounds = useCallback(() => {
     const rect = socialBrowserRef.current?.getBoundingClientRect();
     if (!rect) return null;
@@ -405,10 +411,7 @@ function App() {
     refreshStorages();
     refreshTasks();
     refreshSocialAccounts();
-    window.mediapolotx.localWorks.listImported().then((works) => {
-      setLocalWorksList(works);
-      setLocalWorksMode('imported');
-    });
+    loadImportedLocalWorks();
 
     const off = window.mediapolotx.scanner.onEvent((event) => {
       setMessage(`监听事件：${event.type}`);
@@ -427,7 +430,7 @@ function App() {
       offAiProgress();
       offDuplicateProgress();
     };
-  }, [loadAiStore, loadFiles, refreshSocialAccounts, refreshStorages, refreshTasks, selectedStorageId]);
+  }, [loadAiStore, loadFiles, loadImportedLocalWorks, refreshSocialAccounts, refreshStorages, refreshTasks, selectedStorageId]);
 
   useEffect(() => {
     if (!['socialAccounts', 'socialWorks', 'oneClickPublish'].includes(activeView)) {
@@ -1013,6 +1016,54 @@ function App() {
     if (!result.opened) setMessage(result.errorMessage || '无法打开路径');
   }
 
+  async function refreshView(view) {
+    try {
+      if (view === 'library') {
+        await refreshStorages();
+        if (selectedStorageId) await loadFiles(selectedStorageId);
+        return;
+      }
+      if (['image', 'video'].includes(view)) {
+        if (selectedStorageId) await loadFiles(selectedStorageId);
+        return;
+      }
+      if (view === 'sync') {
+        await refreshTasks();
+        return;
+      }
+      if (view === 'socialAccounts') {
+        await refreshSocialAccounts();
+        return;
+      }
+      if (['socialWorks', 'oneClickPublish'].includes(view)) {
+        if (selectedSocialAccountId) await socialBrowserCommand('reload');
+        return;
+      }
+      if (view === 'localWorks') {
+        await loadImportedLocalWorks();
+        return;
+      }
+      if (view === 'removeAiMark' && aiToolOptions.folderPath) {
+        await scanAiToolFolder();
+        return;
+      }
+      if (view === 'imageDuplicate' && duplicateOptions.folderPath) {
+        await scanDuplicateFolder();
+        return;
+      }
+      if (view === 'aiModelConfig') {
+        await loadAiStore();
+      }
+    } catch (error) {
+      setMessage(`刷新失败：${error.message}`);
+    }
+  }
+
+  function handleNavClick(view) {
+    setActiveView(view);
+    refreshView(view);
+  }
+
   function openWorkPathModal() {
     setWorkPathDraft(localWorksPath);
     setWorkPathModalOpen(true);
@@ -1145,7 +1196,7 @@ function App() {
                   <button
                     key={item.view}
                     className={`navItem subItem ${activeView === item.view ? 'active' : ''}`}
-                  onClick={() => setActiveView(item.view)}
+                  onClick={() => handleNavClick(item.view)}
                   title={item.label}
                 >
                   <NavIcon icon={item.icon} view={item.view} />
@@ -1158,7 +1209,7 @@ function App() {
             <button
               key={item.view}
               className={`navItem ${activeView === item.view ? 'active' : ''}`}
-              onClick={() => setActiveView(item.view)}
+              onClick={() => handleNavClick(item.view)}
               title={item.label}
             >
               <NavIcon icon={item.icon} view={item.view} />
