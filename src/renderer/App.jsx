@@ -332,6 +332,8 @@ function App() {
   const [selectedLocalWork, setSelectedLocalWork] = useState(null);
   const [selectedChildWork, setSelectedChildWork] = useState(null);
   const [selectedMainWork, setSelectedMainWork] = useState(null);
+  const [copywriterModal, setCopywriterModal] = useState(null);
+  const [copywriterProgress, setCopywriterProgress] = useState(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -387,12 +389,22 @@ function App() {
     const start = (normalizedPage - 1) * localWorkPageSize;
     return filteredLocalWorks.slice(start, start + localWorkPageSize);
   }, [filteredLocalWorks, localWorkPage, localWorkPageCount]);
+  const aiTextModels = useMemo(() => (
+    aiStore.models.filter((model) => model.enabled !== false && ['text', 'both'].includes(model.type))
+  ), [aiStore.models]);
 
   useEffect(() => {
     if (localWorkTagFilter !== 'all' && !localWorkTags.includes(localWorkTagFilter)) {
       setLocalWorkTagFilter('all');
     }
   }, [localWorkTagFilter, localWorkTags]);
+
+  useEffect(() => {
+    if (!window.mediapolotx.localWorks?.onCopyProgress) return undefined;
+    return window.mediapolotx.localWorks.onCopyProgress((progress) => {
+      setCopywriterProgress(progress);
+    });
+  }, []);
 
   const loadFiles = useCallback(async (storageId = selectedStorageId) => {
     if (!storageId) return;
@@ -1357,6 +1369,56 @@ function App() {
     setMessage('子作品发布状态已更新');
   }
 
+  function openCopywriterModal(work) {
+    const defaultModelId = aiStore.defaultTextModelId || aiTextModels[0]?.id || '';
+    setCopywriterModal({
+      work,
+      modelId: defaultModelId,
+      temperature: '0.75',
+      maxTokens: String(Math.max(4096, ((work.children?.length || 0) + 1) * 700))
+    });
+    setCopywriterProgress(null);
+  }
+
+  async function generateLocalWorkCopy() {
+    if (!copywriterModal?.work) return;
+    if (!copywriterModal.modelId) {
+      setMessage('请先选择一个可用的 AI 文本模型');
+      return;
+    }
+    try {
+      setBusy(true);
+      setCopywriterProgress({
+        stage: 'start',
+        current: 0,
+        total: (copywriterModal.work.children?.length || 0) + 1,
+        label: '准备生成文案'
+      });
+      setMessage('正在生成作品标题和小红书正文...');
+      const result = await window.mediapolotx.localWorks.generateCopy({
+        workId: copywriterModal.work.id,
+        modelId: copywriterModal.modelId,
+        temperature: copywriterModal.temperature,
+        maxTokens: copywriterModal.maxTokens
+      });
+      setLocalWorksList(result.works);
+      const updatedWork = result.works.find((work) => work.id === copywriterModal.work.id);
+      setSelectedMainWork((current) => (current?.id === updatedWork?.id ? updatedWork : current));
+      setSelectedLocalWork((current) => (current?.id === updatedWork?.id ? updatedWork : current));
+      setSelectedChildWork((current) => {
+        if (!current || !updatedWork) return current;
+        return updatedWork.children.find((child) => child.id === current.id) || current;
+      });
+      setCopywriterModal(null);
+      setCopywriterProgress(null);
+      setMessage(`文案生成完成：${result.generated.title}`);
+    } catch (error) {
+      setMessage(`文案生成失败：${cleanRemoteError(error)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function runTask(taskRunner) {
     setBusy(true);
     setMessage('任务执行中...');
@@ -1760,6 +1822,7 @@ function App() {
             onPageChange={setLocalWorkPage}
             onEditTags={openLocalWorkTagEditor}
             onDeleteWork={deleteLocalWork}
+            onGenerateCopy={openCopywriterModal}
             onStatusChange={updateLocalWorkStatus}
             onOpenMainWork={setSelectedMainWork}
             onOpenPath={openPath}
@@ -2361,6 +2424,22 @@ function App() {
             onClose={() => setLocalWorkTagEditor(null)}
           />
         )}
+        {copywriterModal && (
+          <LocalWorkCopywriterModal
+            value={copywriterModal}
+            models={aiTextModels}
+            busy={busy}
+            progress={copywriterProgress}
+            onChange={setCopywriterModal}
+            onGenerate={generateLocalWorkCopy}
+            onClose={() => {
+              if (!busy) {
+                setCopywriterModal(null);
+                setCopywriterProgress(null);
+              }
+            }}
+          />
+        )}
         {selectedPrompt && (
           <PromptDetailModal
             prompt={selectedPrompt}
@@ -2491,6 +2570,7 @@ function LocalWorksView({
   onPageChange,
   onEditTags,
   onDeleteWork,
+  onGenerateCopy,
   onStatusChange,
   onOpenMainWork,
   onOpenPath,
@@ -2562,6 +2642,7 @@ function LocalWorksView({
               </span>
               <span className="rowActions">
                 <button type="button" onClick={() => onOpenPath(workMdPath(work))} disabled={!work.mdFile}>打开MD</button>
+                <button type="button" onClick={() => onGenerateCopy(work)} disabled={busy || mode === 'scanned' || !work.mdFile}>生成文案</button>
                 <button type="button" onClick={() => onOpenPath(work.folderPath || `${worksPath}\\${work.folderName}`)}>打开目录</button>
                 <button type="button" className="dangerButton" onClick={() => onDeleteWork(work)} disabled={busy}>删除</button>
               </span>
@@ -2591,6 +2672,62 @@ function LocalWorksView({
         </div>
       )}
     </section>
+  );
+}
+
+function LocalWorkCopywriterModal({ value, models, busy, progress, onChange, onGenerate, onClose }) {
+  const work = value.work;
+  const totalItems = (work.children?.length || 0) + 1;
+  const percent = progress?.total ? Math.round((Number(progress.current || 0) / Number(progress.total || 1)) * 100) : 0;
+  return (
+    <div className="modalBackdrop">
+      <div className="mediaAccountModal workPathModal copywriterModal">
+        <div className="modalHeader">
+          <div>
+            <h2>生成作品文案</h2>
+            <p>{work.title}，共 {totalItems} 套文案</p>
+          </div>
+          <button className="iconButton" onClick={onClose} disabled={busy}>×</button>
+        </div>
+        <div className="modalSection">
+          <label>
+            AI 模型
+            <select value={value.modelId} onChange={(event) => onChange({ ...value, modelId: event.target.value })} disabled={busy}>
+              <option value="">请选择文本模型</option>
+              {models.map((model) => (
+                <option key={model.id} value={model.id}>{model.name} / {model.model}</option>
+              ))}
+            </select>
+          </label>
+          <div className="splitInputs">
+            <label>
+              Temperature
+              <input type="number" min="0" max="2" step="0.05" value={value.temperature} onChange={(event) => onChange({ ...value, temperature: event.target.value })} disabled={busy} />
+            </label>
+            <label>
+              Max Tokens
+              <input type="number" min="1024" max="200000" step="512" value={value.maxTokens} onChange={(event) => onChange({ ...value, maxTokens: event.target.value })} disabled={busy} />
+            </label>
+          </div>
+          <div className="toolIntro">
+            <p>生成后会覆盖主作品和子作品的标题与正文；标题限制 20 个中文字符以内，正文限制 1000 字以内。</p>
+          </div>
+          {progress && (
+            <div className="copyProgress">
+              <div>
+                <span>{progress.label}</span>
+                <strong>{percent}%</strong>
+              </div>
+              <progress value={percent} max="100" />
+            </div>
+          )}
+        </div>
+        <div className="modalActions">
+          <button type="button" className="secondaryButton" onClick={onClose} disabled={busy}>取消</button>
+          <button type="button" onClick={onGenerate} disabled={busy || !value.modelId || models.length === 0}>开始生成</button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -3302,8 +3439,8 @@ function mainWorkPreviewItem(work) {
     id: work.id,
     platform: '主作品',
     title: work.title,
-    content: '',
-    tags: [],
+    content: work.content || '',
+    tags: work.tags || [],
     publishStatus: work.publishStatus,
     imagePaths: work.imagePaths || []
   };

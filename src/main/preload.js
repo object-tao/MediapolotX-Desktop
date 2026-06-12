@@ -59,7 +59,13 @@ contextBridge.exposeInMainWorld('mediapolotx', {
     updateTags: (payload) => ipcRenderer.invoke('localWorks:updateTags', payload),
     updateWorkStatus: (payload) => ipcRenderer.invoke('localWorks:updateWorkStatus', payload),
     updateChildStatus: (payload) => ipcRenderer.invoke('localWorks:updateChildStatus', payload),
-    delete: (payload) => ipcRenderer.invoke('localWorks:delete', payload)
+    generateCopy: (payload) => ipcRenderer.invoke('localWorks:generateCopy', payload),
+    delete: (payload) => ipcRenderer.invoke('localWorks:delete', payload),
+    onCopyProgress: (callback) => {
+      const listener = (_event, payload) => callback(payload);
+      ipcRenderer.on('localWorks:copyProgress', listener);
+      return () => ipcRenderer.removeListener('localWorks:copyProgress', listener);
+    }
   },
   social: {
     platforms: () => ipcRenderer.invoke('social:platforms'),

@@ -13,6 +13,7 @@ const imageDuplicator = require('../modules/imageDuplicator');
 const wechatMpMarkdown = require('../modules/wechatMpMarkdown');
 const articleRewriter = require('../modules/articleRewriter');
 const localWorkImporter = require('../modules/localWorkImporter');
+const localWorkCopywriter = require('../modules/localWorkCopywriter');
 const { createAiConfigManager } = require('../modules/aiConfigManager');
 const { createSocialAccountManager } = require('../modules/socialAccountManager');
 const { createProxyManager } = require('../modules/proxyManager');
@@ -148,6 +149,23 @@ function registerIpc() {
   ipcMain.handle('localWorks:delete', async (_event, payload) => (
     localWorkImporter.deleteImportedWork(db, payload)
   ));
+
+  ipcMain.handle('localWorks:generateCopy', async (event, payload) => {
+    const works = localWorkImporter.listImportedWorks(db);
+    const work = works.find((item) => item.id === payload.workId);
+    if (!work) throw new Error('作品不存在');
+    const generated = await localWorkCopywriter.generateLocalWorkCopy(
+      work,
+      payload,
+      (options) => aiConfigManager.completeText(options),
+      (progress) => event.sender.send('localWorks:copyProgress', progress)
+    );
+    const updatedWorks = localWorkImporter.updateWorkCopy(db, generated);
+    return {
+      generated,
+      works: updatedWorks
+    };
+  });
 
   ipcMain.handle('storage:add', (_event, payload) => {
     const storage = storageManager.addStorage(payload.name, payload.type, payload.basePath);

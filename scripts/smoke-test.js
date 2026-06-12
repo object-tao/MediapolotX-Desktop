@@ -11,6 +11,8 @@ const aiMarkRemover = require('../src/modules/aiMarkRemover');
 const imageDuplicator = require('../src/modules/imageDuplicator');
 const wechatMpMarkdown = require('../src/modules/wechatMpMarkdown');
 const articleRewriter = require('../src/modules/articleRewriter');
+const localWorkImporter = require('../src/modules/localWorkImporter');
+const localWorkCopywriter = require('../src/modules/localWorkCopywriter');
 const { createAiConfigManager } = require('../src/modules/aiConfigManager');
 const { createSocialAccountManager } = require('../src/modules/socialAccountManager');
 
@@ -222,6 +224,69 @@ try {
     || qwenRequestUrl !== 'https://dashscope.aliyuncs.com/api/v2/apps/protocols/compatible-mode/v1/responses'
   ) {
     throw new Error('Qwen stale resource ID smoke test failed.');
+  }
+
+  const localWorkMd = path.join(tempRoot, 'local-work.md');
+  fs.writeFileSync(localWorkMd, '# 源文章\n\n这是一篇关于海关公告的源文章。');
+  const localWorkId = 'local-work-smoke';
+  const childId = 'local-work-smoke-child';
+  const now = new Date().toISOString();
+  db.prepare(`
+    INSERT INTO local_works (
+      id, title, folder_name, folder_path, md_file, image_paths, tags, content, publish_status, source_root, created_at, updated_at
+    ) VALUES (
+      @id, @title, @folderName, @folderPath, @mdFile, @imagePaths, @tags, @content, @publishStatus, @sourceRoot, @createdAt, @updatedAt
+    )
+  `).run({
+    id: localWorkId,
+    title: '源文章标题',
+    folderName: 'source',
+    folderPath: tempRoot,
+    mdFile: localWorkMd,
+    imagePaths: '[]',
+    tags: '[]',
+    content: '',
+    publishStatus: '未发布',
+    sourceRoot: tempRoot,
+    createdAt: now,
+    updatedAt: now
+  });
+  db.prepare(`
+    INSERT INTO local_work_children (
+      id, parent_id, title, variant_name, folder_path, image_paths, content, publish_status, created_at, updated_at
+    ) VALUES (
+      @id, @parentId, @title, @variantName, @folderPath, @imagePaths, @content, @publishStatus, @createdAt, @updatedAt
+    )
+  `).run({
+    id: childId,
+    parentId: localWorkId,
+    title: '源文章标题',
+    variantName: 'q99',
+    folderPath: tempRoot,
+    imagePaths: '[]',
+    content: '',
+    publishStatus: '未发布',
+    createdAt: now,
+    updatedAt: now
+  });
+  const localWork = localWorkImporter.listImportedWorks(db).find((work) => work.id === localWorkId);
+  const generatedCopy = await localWorkCopywriter.generateLocalWorkCopy(localWork, { modelId: qwenWithStaleResource.id }, async () => ({
+    modelId: qwenWithStaleResource.id,
+    modelName: 'Smoke Qwen',
+    content: JSON.stringify({
+      main: { title: '海关公告解读', content: '这是一段可发布的小红书正文。' },
+      variants: [{ title: '申报重点提醒', content: '这是另一段差异化子作品正文。' }]
+    })
+  }));
+  const updatedLocalWorks = localWorkImporter.updateWorkCopy(db, generatedCopy);
+  const updatedLocalWork = updatedLocalWorks.find((work) => work.id === localWorkId);
+  if (
+    updatedLocalWork.title !== '海关公告解读'
+    || updatedLocalWork.content !== '这是一段可发布的小红书正文。'
+    || updatedLocalWork.children[0].title !== '申报重点提醒'
+    || updatedLocalWork.children[0].content !== '这是另一段差异化子作品正文。'
+  ) {
+    throw new Error('Local work copywriter smoke test failed.');
   }
 
   const rewriteDir = path.join(tempRoot, 'rewrite-output');

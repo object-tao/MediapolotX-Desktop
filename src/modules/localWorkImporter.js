@@ -86,6 +86,7 @@ async function scanLocalWorks(rootPath) {
       mdFile: findFirstMarkdown(folderPath, entries),
       imagePaths: await scanImages(folderPath, entries),
       tags: [],
+      content: '',
       publishStatus: '未发布',
       children: []
     };
@@ -198,6 +199,7 @@ function listImportedWorks(db) {
     mdFile: row.md_file || '',
     imagePaths: parseImagePaths(row.image_paths),
     tags: JSON.parse(row.tags || '[]'),
+    content: row.content || '',
     publishStatus: row.publish_status,
     children: childMap.get(row.id) || []
   }));
@@ -218,9 +220,9 @@ async function importScannedWorks(db, { sourceRoot, targetRoot, works = [] }) {
 
   const insertWork = db.prepare(`
     INSERT OR REPLACE INTO local_works (
-      id, title, folder_name, folder_path, md_file, image_paths, tags, publish_status, source_root, created_at, updated_at
+      id, title, folder_name, folder_path, md_file, image_paths, tags, content, publish_status, source_root, created_at, updated_at
     ) VALUES (
-      @id, @title, @folderName, @folderPath, @mdFile, @imagePaths, @tags, @publishStatus, @sourceRoot, @createdAt, @updatedAt
+      @id, @title, @folderName, @folderPath, @mdFile, @imagePaths, @tags, @content, @publishStatus, @sourceRoot, @createdAt, @updatedAt
     )
   `);
   const deleteChildren = db.prepare('DELETE FROM local_work_children WHERE parent_id = @parentId');
@@ -249,6 +251,7 @@ async function importScannedWorks(db, { sourceRoot, targetRoot, works = [] }) {
       mdFile: findFirstMarkdown(destinationPath, copiedEntries),
       imagePaths: await scanImages(destinationPath, copiedEntries),
       tags: tagMap.get(sourceWork.folderName) || sourceWork.tags || [],
+      content: '',
       publishStatus: '未发布'
     };
 
@@ -260,6 +263,7 @@ async function importScannedWorks(db, { sourceRoot, targetRoot, works = [] }) {
       mdFile: importedWork.mdFile,
       imagePaths: JSON.stringify(importedWork.imagePaths),
       tags: JSON.stringify(importedWork.tags),
+      content: importedWork.content,
       publishStatus: importedWork.publishStatus,
       sourceRoot,
       createdAt: now,
@@ -411,6 +415,47 @@ function updateChildPublishStatus(db, { childId, publishStatus }) {
   return listImportedWorks(db);
 }
 
+function updateWorkCopy(db, { workId, title, content, children = [] }) {
+  if (!workId) throw new Error('缺少作品 ID');
+  const now = nowIso();
+  const work = db.prepare('SELECT * FROM local_works WHERE id = @workId').get({ workId });
+  if (!work) throw new Error('作品不存在');
+
+  db.prepare(`
+    UPDATE local_works
+    SET title = @title,
+        content = @content,
+        updated_at = @updatedAt
+    WHERE id = @workId
+  `).run({
+    workId,
+    title: normalizeTitle(title || work.title),
+    content: String(content || ''),
+    updatedAt: now
+  });
+
+  const updateChild = db.prepare(`
+    UPDATE local_work_children
+    SET title = @title,
+        content = @content,
+        updated_at = @updatedAt
+    WHERE id = @childId
+      AND parent_id = @workId
+  `);
+  for (const child of children) {
+    if (!child?.id) continue;
+    updateChild.run({
+      workId,
+      childId: child.id,
+      title: normalizeTitle(child.title),
+      content: String(child.content || ''),
+      updatedAt: now
+    });
+  }
+
+  return listImportedWorks(db);
+}
+
 async function deleteImportedWork(db, { workId, targetRoot }) {
   if (!workId) throw new Error('缺少作品 ID');
   if (!targetRoot) throw new Error('请先设置作品路径');
@@ -432,6 +477,10 @@ function normalizePublishStatus(status) {
   return allowed.has(status) ? status : '未发布';
 }
 
+function normalizeTitle(value) {
+  return String(value || '').trim().slice(0, 20) || '未命名作品';
+}
+
 module.exports = {
   scanLocalWorks,
   importScannedWorks,
@@ -440,5 +489,6 @@ module.exports = {
   updateWorkTags,
   updateWorkPublishStatus,
   updateChildPublishStatus,
+  updateWorkCopy,
   deleteImportedWork
 };

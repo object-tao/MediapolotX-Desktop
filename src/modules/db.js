@@ -77,6 +77,7 @@ function migrate(db) {
       md_file TEXT,
       image_paths TEXT NOT NULL DEFAULT '[]',
       tags TEXT NOT NULL DEFAULT '[]',
+      content TEXT NOT NULL DEFAULT '',
       publish_status TEXT NOT NULL DEFAULT '未发布',
       source_root TEXT,
       created_at TEXT NOT NULL,
@@ -100,6 +101,7 @@ function migrate(db) {
 
   addColumnIfMissing(db, 'tasks', 'result', 'TEXT');
   addColumnIfMissing(db, 'local_works', 'tags', "TEXT NOT NULL DEFAULT '[]'");
+  addColumnIfMissing(db, 'local_works', 'content', "TEXT NOT NULL DEFAULT ''");
 }
 
 function addColumnIfMissing(db, tableName, columnName, columnDefinition) {
