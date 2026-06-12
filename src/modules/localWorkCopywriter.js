@@ -170,9 +170,17 @@ function parseGeneratedCopy(content) {
     .replace(/```$/i, '')
     .trim();
   const jsonText = extractJsonObject(cleaned);
+  const repairedJsonText = repairJsonStringControlCharacters(jsonText);
   try {
     return JSON.parse(jsonText);
   } catch (error) {
+    if (repairedJsonText !== jsonText) {
+      try {
+        return JSON.parse(repairedJsonText);
+      } catch {
+        // Keep the original parser error because it points at the raw AI response.
+      }
+    }
     throw new Error(`AI 返回内容不是有效 JSON：${error.message}`);
   }
 }
@@ -182,6 +190,51 @@ function extractJsonObject(text) {
   const end = text.lastIndexOf('}');
   if (start < 0 || end < start) return text;
   return text.slice(start, end + 1);
+}
+
+function repairJsonStringControlCharacters(jsonText) {
+  let output = '';
+  let inString = false;
+  let escaped = false;
+
+  for (const char of String(jsonText || '')) {
+    if (escaped) {
+      output += char;
+      escaped = false;
+      continue;
+    }
+
+    if (char === '\\' && inString) {
+      output += char;
+      escaped = true;
+      continue;
+    }
+
+    if (char === '"') {
+      inString = !inString;
+      output += char;
+      continue;
+    }
+
+    if (inString) {
+      if (char === '\n') {
+        output += '\\n';
+      } else if (char === '\r') {
+        output += '\\r';
+      } else if (char === '\t') {
+        output += '\\t';
+      } else if (char.charCodeAt(0) < 0x20) {
+        output += ' ';
+      } else {
+        output += char;
+      }
+      continue;
+    }
+
+    output += char.charCodeAt(0) < 0x20 && !/\s/.test(char) ? ' ' : char;
+  }
+
+  return output;
 }
 
 function normalizeCopyItem(item = {}, fallbackTitle = '未命名作品') {

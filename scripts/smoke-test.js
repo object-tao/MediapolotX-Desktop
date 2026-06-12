@@ -277,6 +277,14 @@ try {
     children: localWork.children,
     sourceTitle: localWork.title
   });
+  const repairedGeneratedCopy = localWorkCopywriter.parseGeneratedCopy(`{
+    "main": { "title": "json repair", "content": "line one
+line two" },
+    "variants": []
+  }`);
+  if (repairedGeneratedCopy.main.content !== 'line one\nline two') {
+    throw new Error('Local work copywriter JSON repair smoke test failed.');
+  }
   const generatedCopy = await localWorkCopywriter.generateLocalWorkCopy(
     localWork,
     { modelId: qwenWithStaleResource.id, promptTemplate: `${promptTemplate}\n自定义测试提示词。` },
