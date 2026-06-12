@@ -1,5 +1,6 @@
 const path = require('node:path');
-const { app, BrowserView, BrowserWindow, dialog, ipcMain, shell, safeStorage, session } = require('electron');
+const { pathToFileURL } = require('node:url');
+const { app, BrowserView, BrowserWindow, dialog, ipcMain, protocol, shell, safeStorage, session } = require('electron');
 const config = require('../config/default');
 const { createDatabase } = require('../modules/db');
 const { createStorageManager } = require('../modules/storageManager');
@@ -348,8 +349,27 @@ function registerIpc() {
   });
 }
 
+function registerLocalResourceProtocol() {
+  protocol.handle('mediapolotx-local', async (request) => {
+    try {
+      const url = new URL(request.url);
+      if (url.hostname !== 'image') return new Response('Not found', { status: 404 });
+      const filePath = Buffer.from(url.pathname.replace(/^\/+/, ''), 'base64url').toString('utf8');
+      return await netFetchFile(filePath);
+    } catch (error) {
+      return new Response(error.message, { status: 500 });
+    }
+  });
+}
+
+async function netFetchFile(filePath) {
+  const { net } = require('electron');
+  return net.fetch(pathToFileURL(filePath).href);
+}
+
 app.whenReady().then(async () => {
   await bootstrapServices();
+  registerLocalResourceProtocol();
   registerIpc();
   createWindow();
 

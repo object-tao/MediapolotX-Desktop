@@ -1,6 +1,6 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
-const { pathToFileURL } = require('node:url');
+const { fileURLToPath } = require('node:url');
 const { nowIso } = require('./db');
 
 const imageExtensions = new Set(['.png', '.jpg', '.jpeg']);
@@ -18,7 +18,19 @@ async function safeReadDir(folderPath) {
 }
 
 function imageFileUrl(filePath) {
-  return pathToFileURL(filePath).href;
+  return `mediapolotx-local://image/${Buffer.from(filePath).toString('base64url')}`;
+}
+
+function normalizeImageUrl(value) {
+  if (!value) return value;
+  if (value.startsWith('mediapolotx-local://')) return value;
+  if (value.startsWith('file://')) return imageFileUrl(fileURLToPath(value));
+  if (/^[a-zA-Z]:[\\/]/.test(value) || value.startsWith('\\\\')) return imageFileUrl(value);
+  return value;
+}
+
+function parseImagePaths(value) {
+  return JSON.parse(value || '[]').map(normalizeImageUrl);
 }
 
 async function scanImages(folderPath, entries) {
@@ -116,7 +128,7 @@ function childRowToUi(child) {
     content: child.content,
     tags: [],
     publishStatus: child.publish_status,
-    imagePaths: JSON.parse(child.image_paths || '[]')
+    imagePaths: parseImagePaths(child.image_paths)
   };
 }
 
@@ -145,7 +157,7 @@ function listImportedWorks(db) {
     folderName: row.folder_name,
     folderPath: row.folder_path,
     mdFile: row.md_file || '',
-    imagePaths: JSON.parse(row.image_paths || '[]'),
+    imagePaths: parseImagePaths(row.image_paths),
     publishStatus: row.publish_status,
     children: childMap.get(row.id) || []
   }));
