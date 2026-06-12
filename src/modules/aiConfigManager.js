@@ -84,7 +84,7 @@ function createAiConfigManager(settingsManager, safeStorage) {
     try {
       const response = normalized.provider === 'doubao'
         ? await postResponsesRequest(normalized, headers, [{ role: 'user', content: 'ping' }], { maxTokens: 32, temperature: 0, timeout: 20000 })
-        : await axios.post(`${trimTrailingSlash(normalized.baseUrl)}/chat/completions`, {
+        : await axios.post(buildChatCompletionsUrl(normalized.baseUrl), {
           model: modelName,
           messages: [{ role: 'user', content: 'ping' }],
           max_tokens: 8,
@@ -121,7 +121,7 @@ function createAiConfigManager(settingsManager, safeStorage) {
           content: extractResponseText(response.data)
         };
       }
-      const response = await axios.post(`${trimTrailingSlash(model.baseUrl)}/chat/completions`, {
+      const response = await axios.post(buildChatCompletionsUrl(model.baseUrl), {
         model: getRequestModelName(model),
         messages: options.messages,
         temperature: Number(options.temperature ?? model.temperature ?? 0.5),
@@ -229,7 +229,7 @@ function normalizeModel(model = {}) {
     id: model.id || randomUUID(),
     name: model.name || `${defaults.label} ${model.model || defaults.model}`,
     provider,
-    baseUrl: trimTrailingSlash(model.baseUrl || defaults.baseUrl),
+    baseUrl: normalizeProviderBaseUrl(provider, model.baseUrl || defaults.baseUrl),
     encryptedApiKey: model.encryptedApiKey || '',
     apiKey: model.apiKey || '',
     resourceId: model.resourceId || defaults.resourceId || '',
@@ -256,6 +256,20 @@ function getProviderDefaults(provider) {
 
 function getRequestModelName(model) {
   return model.model;
+}
+
+function normalizeProviderBaseUrl(provider, baseUrl) {
+  const normalized = trimTrailingSlash(baseUrl);
+  if (provider === 'qwen' && /dashscope\.aliyuncs\.com/i.test(normalized)) {
+    return 'https://dashscope.aliyuncs.com/compatible-mode/v1';
+  }
+  return normalized.replace(/\/chat\/completions$/i, '');
+}
+
+function buildChatCompletionsUrl(baseUrl) {
+  const normalized = trimTrailingSlash(baseUrl);
+  if (/\/chat\/completions$/i.test(normalized)) return normalized;
+  return `${normalized}/chat/completions`;
 }
 
 function createRequestHeaders(provider, apiKey) {
