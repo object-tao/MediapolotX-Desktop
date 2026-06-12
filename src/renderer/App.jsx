@@ -404,10 +404,18 @@ function App() {
   }, []);
 
   const loadImportedLocalWorks = useCallback(async () => {
-    const works = await window.mediapolotx.localWorks.listImported();
-    setLocalWorksList(works);
+    if (localWorksPath) {
+      const result = await window.mediapolotx.localWorks.organizeImported({ targetRoot: localWorksPath });
+      setLocalWorksList(result.works);
+      if (result.movedCount > 0) {
+        setMessage(`已整理 ${result.movedCount} 个旧作品目录`);
+      }
+    } else {
+      const works = await window.mediapolotx.localWorks.listImported();
+      setLocalWorksList(works);
+    }
     setLocalWorksMode('imported');
-  }, []);
+  }, [localWorksPath]);
 
   const getSocialBrowserBounds = useCallback(() => {
     const rect = socialBrowserRef.current?.getBoundingClientRect();
@@ -1195,6 +1203,32 @@ function App() {
     setMessage('标签已保存');
   }
 
+  async function deleteLocalWork(work) {
+    if (localWorksMode !== 'imported') {
+      setLocalWorksList((current) => current.filter((item) => item.id !== work.id));
+      setMessage('已从导入预览中移除');
+      return;
+    }
+    const confirmed = window.confirm(`确定删除作品“${work.title}”吗？\n将同时删除数据库记录和对应文件目录。`);
+    if (!confirmed) return;
+    try {
+      setBusy(true);
+      const works = await window.mediapolotx.localWorks.delete({
+        workId: work.id,
+        targetRoot: localWorksPath
+      });
+      setLocalWorksList(works);
+      setSelectedLocalWork(null);
+      setSelectedChildWork(null);
+      setSelectedMainWork(null);
+      setMessage('作品已删除');
+    } catch (error) {
+      setMessage(`删除失败：${error.message}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function runTask(taskRunner) {
     setBusy(true);
     setMessage('任务执行中...');
@@ -1575,6 +1609,7 @@ function App() {
             tagFilter={localWorkTagFilter}
             onTagFilterChange={setLocalWorkTagFilter}
             onEditTags={openLocalWorkTagEditor}
+            onDeleteWork={deleteLocalWork}
             onOpenMainWork={setSelectedMainWork}
             onOpenPath={openPath}
             onOpenChildren={(work) => {
@@ -2296,6 +2331,7 @@ function LocalWorksView({
   tagFilter,
   onTagFilterChange,
   onEditTags,
+  onDeleteWork,
   onOpenMainWork,
   onOpenPath,
   onOpenChildren
@@ -2360,6 +2396,7 @@ function LocalWorksView({
               <span className="rowActions">
                 <button type="button" onClick={() => onOpenPath(workMdPath(work))} disabled={!work.mdFile}>打开MD</button>
                 <button type="button" onClick={() => onOpenPath(work.folderPath || `${worksPath}\\${work.folderName}`)}>打开目录</button>
+                <button type="button" className="dangerButton" onClick={() => onDeleteWork(work)} disabled={busy}>删除</button>
               </span>
             </div>
           ))}

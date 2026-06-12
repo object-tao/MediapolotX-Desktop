@@ -119,8 +119,16 @@ function registerIpc() {
     localWorkImporter.listImportedWorks(db)
   ));
 
+  ipcMain.handle('localWorks:organizeImported', async (_event, payload) => (
+    localWorkImporter.organizeImportedWorks(db, payload)
+  ));
+
   ipcMain.handle('localWorks:updateTags', async (_event, payload) => (
     localWorkImporter.updateWorkTags(db, payload)
+  ));
+
+  ipcMain.handle('localWorks:delete', async (_event, payload) => (
+    localWorkImporter.deleteImportedWork(db, payload)
   ));
 
   ipcMain.handle('storage:add', (_event, payload) => {

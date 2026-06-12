@@ -118,6 +118,44 @@ async function uniqueFolderPath(targetRoot, folderName) {
   return candidate;
 }
 
+function sanitizeFolderName(value) {
+  return String(value || 'work')
+    .replace(/[<>:"/\\|?*]/g, '_')
+    .replaceAll('\u0000', '_')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 80) || 'work';
+}
+
+function dateFolderParts(date = new Date()) {
+  const year = String(date.getFullYear());
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return { year, month, day };
+}
+
+function localWorksRoot(targetRoot) {
+  return path.join(targetRoot, 'local-works');
+}
+
+async function uniqueDatedWorkPath(targetRoot, title, date = new Date()) {
+  const { year, month, day } = dateFolderParts(date);
+  const baseRoot = path.join(localWorksRoot(targetRoot), year, month);
+  await fs.mkdir(baseRoot, { recursive: true });
+  return uniqueFolderPath(baseRoot, `${year}${month}${day}_${sanitizeFolderName(title)}`);
+}
+
+function isPathInside(parentPath, childPath) {
+  const parent = path.resolve(parentPath).toLowerCase();
+  const child = path.resolve(childPath).toLowerCase();
+  const relative = path.relative(parent, child);
+  return Boolean(relative) && !relative.startsWith('..') && !path.isAbsolute(relative);
+}
+
+function isInOrganizedLocalWorks(targetRoot, folderPath) {
+  return isPathInside(localWorksRoot(targetRoot), folderPath);
+}
+
 function childRowToUi(child) {
   return {
     id: child.id,
@@ -169,7 +207,7 @@ async function importScannedWorks(db, { sourceRoot, targetRoot, works = [] }) {
   if (!sourceRoot) throw new Error('请先选择目录导入并完成扫描');
   if (!targetRoot) throw new Error('请先设置作品路径');
 
-  await fs.mkdir(targetRoot, { recursive: true });
+  await fs.mkdir(localWorksRoot(targetRoot), { recursive: true });
   const scanned = await scanLocalWorks(sourceRoot);
   const tagMap = new Map(
     works
@@ -196,7 +234,7 @@ async function importScannedWorks(db, { sourceRoot, targetRoot, works = [] }) {
 
   let importedCount = 0;
   for (const sourceWork of scanned.works) {
-    const destinationPath = await uniqueFolderPath(targetRoot, sourceWork.folderName);
+    const destinationPath = await uniqueDatedWorkPath(targetRoot, sourceWork.title);
     await fs.cp(sourceWork.folderPath, destinationPath, { recursive: true });
     const copiedEntries = await safeReadDir(destinationPath);
     const childDirs = copiedEntries
@@ -255,6 +293,85 @@ async function importScannedWorks(db, { sourceRoot, targetRoot, works = [] }) {
   };
 }
 
+async function organizeImportedWorks(db, { targetRoot }) {
+  if (!targetRoot) return { movedCount: 0, works: listImportedWorks(db) };
+
+  await fs.mkdir(localWorksRoot(targetRoot), { recursive: true });
+  const rows = db.prepare('SELECT * FROM local_works ORDER BY created_at ASC').all();
+  const updateWork = db.prepare(`
+    UPDATE local_works
+    SET folder_name = @folderName,
+        folder_path = @folderPath,
+        md_file = @mdFile,
+        image_paths = @imagePaths,
+        updated_at = @updatedAt
+    WHERE id = @id
+  `);
+  const deleteChildren = db.prepare('DELETE FROM local_work_children WHERE parent_id = @parentId');
+  const insertChild = db.prepare(`
+    INSERT OR REPLACE INTO local_work_children (
+      id, parent_id, title, variant_name, folder_path, image_paths, content, publish_status, created_at, updated_at
+    ) VALUES (
+      @id, @parentId, @title, @variantName, @folderPath, @imagePaths, @content, @publishStatus, @createdAt, @updatedAt
+    )
+  `);
+
+  let movedCount = 0;
+  for (const row of rows) {
+    if (!row.folder_path || !isPathInside(targetRoot, row.folder_path) || isInOrganizedLocalWorks(targetRoot, row.folder_path)) {
+      continue;
+    }
+    if (!(await pathExists(row.folder_path))) continue;
+
+    const destinationPath = await uniqueDatedWorkPath(targetRoot, row.title, new Date(row.created_at || Date.now()));
+    await fs.rename(row.folder_path, destinationPath);
+    const entries = await safeReadDir(destinationPath);
+    const childDirs = entries
+      .filter((entry) => entry.isDirectory())
+      .sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN'));
+    const now = nowIso();
+
+    const existingChildren = new Map(db.prepare(`
+      SELECT * FROM local_work_children
+      WHERE parent_id = @parentId
+    `).all({ parentId: row.id }).map((child) => [child.variant_name, child]));
+
+    updateWork.run({
+      id: row.id,
+      folderName: path.basename(destinationPath),
+      folderPath: destinationPath,
+      mdFile: findFirstMarkdown(destinationPath, entries),
+      imagePaths: JSON.stringify(await scanImages(destinationPath, entries)),
+      updatedAt: now
+    });
+    deleteChildren.run({ parentId: row.id });
+
+    for (const childDir of childDirs) {
+      const childPath = path.join(destinationPath, childDir.name);
+      const childEntries = await safeReadDir(childPath);
+      const existingChild = existingChildren.get(childDir.name);
+      insertChild.run({
+        id: existingChild?.id || `${row.id}-${Buffer.from(childDir.name).toString('base64url')}`,
+        parentId: row.id,
+        title: row.title,
+        variantName: childDir.name,
+        folderPath: childPath,
+        imagePaths: JSON.stringify(await scanImages(childPath, childEntries)),
+        content: existingChild?.content || '',
+        publishStatus: existingChild?.publish_status || row.publish_status || '未发布',
+        createdAt: existingChild?.created_at || row.created_at || now,
+        updatedAt: now
+      });
+    }
+    movedCount += 1;
+  }
+
+  return {
+    movedCount,
+    works: listImportedWorks(db)
+  };
+}
+
 function updateWorkTags(db, { workId, tags }) {
   db.prepare(`
     UPDATE local_works
@@ -268,9 +385,27 @@ function updateWorkTags(db, { workId, tags }) {
   return listImportedWorks(db);
 }
 
+async function deleteImportedWork(db, { workId, targetRoot }) {
+  if (!workId) throw new Error('缺少作品 ID');
+  if (!targetRoot) throw new Error('请先设置作品路径');
+
+  const row = db.prepare('SELECT * FROM local_works WHERE id = @workId').get({ workId });
+  if (!row) return listImportedWorks(db);
+  if (!row.folder_path || !isPathInside(targetRoot, row.folder_path)) {
+    throw new Error('作品目录不在当前作品路径内，已阻止删除文件');
+  }
+
+  await fs.rm(row.folder_path, { recursive: true, force: true });
+  db.prepare('DELETE FROM local_work_children WHERE parent_id = @workId').run({ workId });
+  db.prepare('DELETE FROM local_works WHERE id = @workId').run({ workId });
+  return listImportedWorks(db);
+}
+
 module.exports = {
   scanLocalWorks,
   importScannedWorks,
   listImportedWorks,
-  updateWorkTags
+  organizeImportedWorks,
+  updateWorkTags,
+  deleteImportedWork
 };
