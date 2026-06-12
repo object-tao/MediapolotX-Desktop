@@ -9,7 +9,7 @@ const PROVIDERS = {
   qwen: { label: '通义千问', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-plus', visionModel: 'qwen-vl-plus', auth: 'bearer' },
   deepseek: { label: 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-chat', visionModel: 'deepseek-chat', auth: 'bearer' },
   zhipu: { label: '智谱 GLM', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4-flash', visionModel: 'glm-4v-flash', auth: 'bearer' },
-  doubao: { label: '豆包/火山方舟', baseUrl: 'https://ark.cn-beijing.volces.com/api/v3', model: 'doubao-seed-1-6', visionModel: 'doubao-vision-pro', resourceId: '', auth: 'bearer', testMode: 'chat' },
+  doubao: { label: '豆包/火山方舟', baseUrl: 'https://ark.cn-beijing.volces.com/api/v3', model: 'doubao-seed-2-0-pro-260215', visionModel: 'doubao-seed-2-0-pro-260215', resourceId: '', auth: 'raw', testMode: 'responses' },
   hunyuan: { label: '腾讯混元', baseUrl: 'https://api.hunyuan.cloud.tencent.com/v1', model: 'hunyuan-turbos-latest', visionModel: 'hunyuan-vision', auth: 'bearer' },
   ollama: { label: 'Ollama', baseUrl: 'http://127.0.0.1:11434/v1', model: 'qwen2.5', visionModel: 'llava', auth: 'optional' },
   compatible: { label: 'OpenAI Compatible', baseUrl: 'https://api.example.com/v1', model: 'model-name', visionModel: 'vision-model-name', auth: 'bearer' }
@@ -76,22 +76,23 @@ function createAiConfigManager(settingsManager, safeStorage) {
     const existing = store.models.find((item) => item.id === normalized.id);
     const provider = getProviderDefaults(normalized.provider);
     const apiKey = normalized.apiKey || decryptApiKey(normalized.encryptedApiKey || existing?.encryptedApiKey);
-    const headers = { 'Content-Type': 'application/json' };
     if (provider.auth !== 'optional' && !apiKey) throw new Error('API Key 不能为空');
-    if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+    const headers = createRequestHeaders(provider, apiKey);
 
     const modelName = getRequestModelName(normalized);
-    if (!modelName) throw new Error(normalized.provider === 'doubao' ? '模型 ID 或资源 ID 不能为空' : '模型 ID 不能为空');
+    if (!modelName) throw new Error('模型 ID 不能为空');
     try {
-      const response = await axios.post(`${trimTrailingSlash(normalized.baseUrl)}/chat/completions`, {
-        model: modelName,
-        messages: [{ role: 'user', content: 'ping' }],
-        max_tokens: 8,
-        temperature: 0
-      }, { timeout: 20000, headers });
+      const response = normalized.provider === 'doubao'
+        ? await postResponsesRequest(normalized, headers, [{ role: 'user', content: 'ping' }], { maxTokens: 32, temperature: 0, timeout: 20000 })
+        : await axios.post(`${trimTrailingSlash(normalized.baseUrl)}/chat/completions`, {
+          model: modelName,
+          messages: [{ role: 'user', content: 'ping' }],
+          max_tokens: 8,
+          temperature: 0
+        }, { timeout: 20000, headers });
       return {
         ok: true,
-        message: `连接成功，模型返回：${response.data?.choices?.[0]?.message?.content || response.data?.id || 'ok'}`
+        message: `连接成功，模型返回：${extractResponseText(response.data) || response.data?.choices?.[0]?.message?.content || response.data?.id || 'ok'}`
       };
     } catch (error) {
       throw new Error(formatTestError(error, normalized));
@@ -104,11 +105,22 @@ function createAiConfigManager(settingsManager, safeStorage) {
     if (!model) throw new Error('请先在“基础配置 > AI模型配置”中保存并设置默认文本模型');
     const provider = getProviderDefaults(model.provider);
     const apiKey = decryptApiKey(model.encryptedApiKey);
-    const headers = { 'Content-Type': 'application/json' };
     if (provider.auth !== 'optional' && !apiKey) throw new Error('默认文本模型缺少 API Key');
-    if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+    const headers = createRequestHeaders(provider, apiKey);
 
     try {
+      if (model.provider === 'doubao') {
+        const response = await postResponsesRequest(model, headers, options.messages, {
+          temperature: Number(options.temperature ?? model.temperature ?? 0.5),
+          maxTokens: Number(options.maxTokens ?? model.maxTokens ?? 4096),
+          timeout: Number(options.timeout ?? 120000)
+        });
+        return {
+          modelId: model.id,
+          modelName: model.name,
+          content: extractResponseText(response.data)
+        };
+      }
       const response = await axios.post(`${trimTrailingSlash(model.baseUrl)}/chat/completions`, {
         model: getRequestModelName(model),
         messages: options.messages,
@@ -243,8 +255,45 @@ function getProviderDefaults(provider) {
 }
 
 function getRequestModelName(model) {
-  if (model.provider === 'doubao' && model.resourceId) return model.resourceId;
   return model.model;
+}
+
+function createRequestHeaders(provider, apiKey) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (!apiKey) return headers;
+  headers.Authorization = provider.auth === 'raw' || /^Bearer\s+/i.test(apiKey)
+    ? apiKey
+    : `Bearer ${apiKey}`;
+  return headers;
+}
+
+function messagesToResponsesInput(messages = []) {
+  return messages.map((message) => ({
+    role: message.role || 'user',
+    content: Array.isArray(message.content)
+      ? message.content
+      : [{ type: 'input_text', text: String(message.content || '') }]
+  }));
+}
+
+function postResponsesRequest(model, headers, messages, options = {}) {
+  return axios.post(`${trimTrailingSlash(model.baseUrl)}/responses`, {
+    model: getRequestModelName(model),
+    input: messagesToResponsesInput(messages),
+    temperature: Number(options.temperature ?? model.temperature ?? 0.5),
+    max_output_tokens: Number(options.maxTokens ?? model.maxTokens ?? 4096)
+  }, { timeout: Number(options.timeout ?? 120000), headers });
+}
+
+function extractResponseText(data) {
+  if (!data) return '';
+  if (typeof data.output_text === 'string') return data.output_text;
+  if (Array.isArray(data.output)) {
+    return data.output.flatMap((item) => (
+      Array.isArray(item.content) ? item.content : []
+    )).map((content) => content.text || '').filter(Boolean).join('\n');
+  }
+  return '';
 }
 
 function trimTrailingSlash(value) {
@@ -260,7 +309,7 @@ function formatTestError(error, model) {
   if (status === 404) {
     let hint = '请确认 API Base URL 以 /v1 或供应商兼容路径结尾，并确认模型 ID 正确。';
     if (model.provider === 'doubao') {
-      hint = '豆包/火山方舟请确认 API Base URL 为 https://ark.cn-beijing.volces.com/api/v3，资源 ID 应使用控制台里的 Endpoint ID，通常以 ep- 开头，不是 API Key。';
+      hint = '豆包/火山方舟请确认 API Base URL 为 https://ark.cn-beijing.volces.com/api/v3，模型 ID 例如 doubao-seed-2-0-pro-260215，当前使用 /responses 接口。';
     }
     if (model.provider === 'qwen') {
       hint = '通义千问请确认 API Base URL 为 https://dashscope.aliyuncs.com/compatible-mode/v1，模型 ID 例如 qwen-plus、qwen-turbo、qwen-max，不要填写资源 ID。';

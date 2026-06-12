@@ -2186,7 +2186,7 @@ function App() {
                   >
                     <span>
                       <strong>{model.name}</strong>
-                      <small>{providerLabel(aiProviders, model.provider)} / {model.provider === 'doubao' && model.resourceId ? model.resourceId : model.model}</small>
+                      <small>{providerLabel(aiProviders, model.provider)} / {model.model}</small>
                     </span>
                     <em>{model.enabled ? model.type : 'disabled'}</em>
                     <div className="modelBadges">
@@ -2229,8 +2229,8 @@ function App() {
                   </label>
                   {editingAiModel.provider === 'doubao' && (
                     <label>
-                      资源 ID
-                      <input value={editingAiModel.resourceId || ''} onChange={(event) => setEditingAiModel({ ...editingAiModel, resourceId: event.target.value })} placeholder="火山方舟 Endpoint ID / 资源 ID，例如 ep-xxxxxxxx" />
+                      资源 ID（可选）
+                      <input value={editingAiModel.resourceId || ''} onChange={(event) => setEditingAiModel({ ...editingAiModel, resourceId: event.target.value })} placeholder="当前 responses 接口不需要填写；模型 ID 填 doubao-seed-2-0-pro-260215" />
                     </label>
                   )}
                   <div className="splitInputs">
