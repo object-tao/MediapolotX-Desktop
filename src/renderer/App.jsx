@@ -172,7 +172,7 @@ function App() {
   const socialBrowserRef = useRef(null);
   const [appStatus, setAppStatus] = useState(null);
   const [activeView, setActiveView] = useState('library');
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [navGroupExpanded, setNavGroupExpanded] = useState(() => (
     Object.fromEntries(groupedNavItems.map((group) => [group.key, true]))
   ));
