@@ -1123,7 +1123,7 @@ textarea {
   gap: 16px;
 }
 
-.localWorksHeader > div {
+.localWorksTitle {
   display: grid;
   gap: 5px;
   min-width: 0;
@@ -1140,13 +1140,27 @@ textarea {
 }
 
 .localWorksFilters {
+  display: flex;
   align-items: center;
+  justify-content: flex-end;
   flex-wrap: wrap;
+  gap: 8px;
+  max-width: 760px;
 }
 
 .localWorkSearchInput {
   width: 220px;
-  min-height: 36px;
+  min-height: 34px;
+}
+
+.localWorksFilters select {
+  width: 150px;
+  min-height: 34px;
+}
+
+.localWorksFilters .secondaryButton {
+  min-height: 34px;
+  padding: 0 12px;
 }
 
 .localWorkTable {

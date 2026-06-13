@@ -2966,7 +2966,7 @@ function PromptLibraryView({
   return (
     <section className="promptLibraryPage">
       <div className="panel promptFilterPanel">
-        <div>
+        <div className="localWorksTitle">
           <h2>AI提示词库</h2>
           <p>按分类和标签筛选常用提示词，点击卡片查看完整内容并复制复用。</p>
         </div>
