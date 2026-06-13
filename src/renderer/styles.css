@@ -425,7 +425,7 @@ nav {
 
 .knowledgeBody {
   display: grid;
-  grid-template-columns: 320px minmax(0, 1fr);
+  grid-template-columns: 360px minmax(0, 1fr);
   gap: 16px;
   min-height: 560px;
 }
@@ -435,9 +435,15 @@ nav {
   min-width: 0;
 }
 
+.knowledgeTreePanel {
+  overflow: auto;
+  max-height: calc(100vh - 220px);
+}
+
 .knowledgeTree {
   display: grid;
-  gap: 2px;
+  gap: 1px;
+  min-width: 0;
 }
 
 .knowledgeTreeItem {
@@ -447,10 +453,11 @@ nav {
 .knowledgeTreeNode {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   border-radius: 6px;
-  min-height: 36px;
-  padding-right: 8px;
+  min-height: 30px;
+  padding-right: 6px;
+  min-width: 0;
 }
 
 .knowledgeTreeNode.active {
@@ -464,18 +471,21 @@ nav {
 }
 
 .treeToggle {
-  width: 24px;
+  width: 18px;
+  padding: 0;
   color: #536173;
   flex: 0 0 auto;
+  font-size: 12px;
+  line-height: 1;
 }
 
 .treeNodeIcon {
   display: inline-grid;
   place-items: center;
-  width: 18px;
-  height: 18px;
+  width: 14px;
+  height: 14px;
   border-radius: 4px;
-  font-size: 11px;
+  font-size: 8px;
   flex: 0 0 auto;
 }
 
@@ -487,34 +497,56 @@ nav {
   border-radius: 999px;
   background: #f77b81;
   color: #ffffff;
-  font-size: 9px;
+  font-size: 7px;
 }
 
 .treeTitle {
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   text-align: left;
   color: #102033;
-  font-weight: 600;
+  font-size: 14px;
+  line-height: 1.35;
+  font-weight: 500;
+  padding: 0;
 }
 
 .knowledgeRichText {
   margin-top: 18px;
   color: #102033;
-  line-height: 1.75;
+  font-size: 15px;
+  line-height: 1.72;
 }
 
 .knowledgeRichText h1,
 .knowledgeRichText h2,
 .knowledgeRichText h3 {
   margin: 18px 0 10px;
+  line-height: 1.35;
+}
+
+.knowledgeRichText h1 {
+  font-size: 24px;
+}
+
+.knowledgeRichText h2 {
+  font-size: 20px;
+}
+
+.knowledgeRichText h3 {
+  font-size: 17px;
 }
 
 .knowledgeRichText p,
 .knowledgeRichText ul {
   margin: 0 0 12px;
+}
+
+.knowledgeRichText ul {
+  padding-left: 24px;
 }
 
 .knowledgeEditorModal {
