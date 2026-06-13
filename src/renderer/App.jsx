@@ -3019,7 +3019,7 @@ function KnowledgeTree({ nodes, selectedId, expandedIds, onSelect, onToggle, dep
         const hasChildren = node.children.length > 0;
         return (
           <div className="knowledgeTreeItem" key={node.id}>
-            <div className={`knowledgeTreeNode ${selectedId === node.id ? 'active' : ''}`} style={{ paddingLeft: `${depth * 16 + 8}px` }}>
+            <div className={`knowledgeTreeNode ${selectedId === node.id ? 'active' : ''}`} style={{ paddingLeft: `${depth * 14}px` }}>
               <button type="button" className="treeToggle" onClick={() => hasChildren && onToggle(node.id)} disabled={!hasChildren}>
                 {hasChildren ? (expanded ? '▾' : '▸') : '·'}
               </button>
