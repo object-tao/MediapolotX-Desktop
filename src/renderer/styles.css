@@ -1131,16 +1131,18 @@ textarea {
   overflow: hidden;
   border: 1px solid #e4e9f0;
   border-radius: 6px;
+  font-size: 13px;
 }
 
 .localWorkRow {
   display: grid;
   grid-template-columns: 64px 76px 110px 110px 110px minmax(220px, 1.4fr) minmax(160px, 1fr) 110px 110px minmax(220px, auto);
-  gap: 12px;
+  gap: 10px;
   align-items: center;
-  padding: 11px 12px;
+  padding: 9px 10px;
   border-bottom: 1px solid #e9edf3;
   min-width: 0;
+  line-height: 1.35;
 }
 
 .localWorkRow:last-child {
@@ -1166,6 +1168,7 @@ textarea {
   color: #2b7a78;
   background: transparent;
   font-weight: 700;
+  font-size: 13px;
 }
 
 .titleLink {
@@ -1179,28 +1182,28 @@ textarea {
 .localWorkTags {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   min-width: 0;
 }
 
 .localWorkTags small {
   border-radius: 999px;
-  padding: 3px 8px;
+  padding: 2px 7px;
   background: #eef2f7;
   color: #536173;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .copyStatusCell {
   display: flex;
-  gap: 5px;
+  gap: 4px;
   flex-wrap: wrap;
 }
 
 .copyStatusCell small {
   border-radius: 999px;
-  padding: 3px 7px;
-  font-size: 12px;
+  padding: 2px 7px;
+  font-size: 11px;
 }
 
 .copyReady {
