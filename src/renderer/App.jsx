@@ -3023,6 +3023,9 @@ function KnowledgeTree({ nodes, selectedId, expandedIds, onSelect, onToggle, dep
               <button type="button" className="treeToggle" onClick={() => hasChildren && onToggle(node.id)} disabled={!hasChildren}>
                 {hasChildren ? (expanded ? '▾' : '▸') : '·'}
               </button>
+              <span className={`treeNodeIcon ${node.nodeType === 'directory' ? 'directory' : 'content'}`}>
+                {node.nodeType === 'directory' ? '■' : '◉'}
+              </span>
               <button type="button" className="treeTitle" onClick={() => onSelect(node.id)} title={node.title}>
                 {node.title}
               </button>

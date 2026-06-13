@@ -100,6 +100,124 @@ function createKnowledgeBaseManager(db, baseDir) {
     return listNodes(filterIndustry);
   }
 
+  async function importDirectory(payload = {}) {
+    await ensureBaseDir();
+    const sourceRoot = String(payload.sourceRoot || '').trim();
+    const industry = normalizeIndustry(payload.industry);
+    if (!sourceRoot) throw new Error('请选择知识库导入目录');
+    const stat = await fs.stat(sourceRoot).catch(() => null);
+    if (!stat?.isDirectory()) throw new Error('知识库导入目录不存在');
+
+    const rootTitle = normalizeTitle(payload.rootTitle || path.basename(sourceRoot));
+    if (payload.replaceExisting !== false) {
+      const existingRoots = db.prepare(`
+        SELECT id FROM knowledge_base_nodes
+        WHERE parent_id = '' AND title = @rootTitle AND industry = @industry
+      `).all({ rootTitle, industry });
+      for (const root of existingRoots) {
+        await deleteNode(root.id, 'all');
+      }
+    }
+
+    const importRoot = path.join(baseDir, 'imports', sanitizePathPart(rootTitle));
+    await fs.rm(importRoot, { recursive: true, force: true });
+    await fs.mkdir(importRoot, { recursive: true });
+    const imported = { directories: 0, files: 0 };
+    await importFolder({
+      sourceFolder: sourceRoot,
+      destinationRoot: importRoot,
+      sourceRoot,
+      parentId: '',
+      title: rootTitle,
+      industry,
+      sortOrder: Number(payload.sortOrder || 0),
+      imported
+    });
+    return {
+      imported,
+      ...(await listNodes(payload.filterIndustry || industry))
+    };
+  }
+
+  async function importFolder({ sourceFolder, destinationRoot, sourceRoot, parentId, title, industry, sortOrder, imported }) {
+    const now = nowIso();
+    const id = `kb-${randomUUID()}`;
+    db.prepare(`
+      INSERT INTO knowledge_base_nodes (
+        id, parent_id, title, industry, node_type, file_path, sort_order, created_at, updated_at
+      ) VALUES (
+        @id, @parentId, @title, @industry, 'directory', '', @sortOrder, @createdAt, @updatedAt
+      )
+    `).run({
+      id,
+      parentId,
+      title,
+      industry,
+      sortOrder,
+      createdAt: now,
+      updatedAt: now
+    });
+    imported.directories += 1;
+
+    const entries = (await fs.readdir(sourceFolder, { withFileTypes: true }))
+      .filter((entry) => !entry.name.startsWith('.'))
+      .sort(compareImportEntries);
+    let childOrder = 0;
+    for (const entry of entries) {
+      const sourcePath = path.join(sourceFolder, entry.name);
+      if (entry.isDirectory()) {
+        await importFolder({
+          sourceFolder: sourcePath,
+          destinationRoot,
+          sourceRoot,
+          parentId: id,
+          title: cleanTitle(entry.name),
+          industry,
+          sortOrder: childOrder,
+          imported
+        });
+        childOrder += 1;
+      } else if (isMarkdownFile(entry.name)) {
+        await importMarkdownFile({
+          sourcePath,
+          destinationRoot,
+          sourceRoot,
+          parentId: id,
+          title: cleanTitle(path.basename(entry.name, path.extname(entry.name))),
+          industry,
+          sortOrder: childOrder
+        });
+        imported.files += 1;
+        childOrder += 1;
+      }
+    }
+    return id;
+  }
+
+  async function importMarkdownFile({ sourcePath, destinationRoot, sourceRoot, parentId, title, industry, sortOrder }) {
+    const relativePath = path.relative(sourceRoot, sourcePath);
+    const destinationPath = path.join(destinationRoot, ...relativePath.split(path.sep).map(sanitizePathPart));
+    await fs.mkdir(path.dirname(destinationPath), { recursive: true });
+    await fs.copyFile(sourcePath, destinationPath);
+    const now = nowIso();
+    db.prepare(`
+      INSERT INTO knowledge_base_nodes (
+        id, parent_id, title, industry, node_type, file_path, sort_order, created_at, updated_at
+      ) VALUES (
+        @id, @parentId, @title, @industry, 'content', @filePath, @sortOrder, @createdAt, @updatedAt
+      )
+    `).run({
+      id: `kb-${randomUUID()}`,
+      parentId,
+      title,
+      industry,
+      filePath: destinationPath,
+      sortOrder,
+      createdAt: now,
+      updatedAt: now
+    });
+  }
+
   async function ensureSeedData() {
     const count = db.prepare('SELECT COUNT(*) AS count FROM knowledge_base_nodes').get()?.count || 0;
     if (Number(count) > 0) return listNodes('all');
@@ -143,6 +261,7 @@ function createKnowledgeBaseManager(db, baseDir) {
     readNode,
     saveNode,
     deleteNode,
+    importDirectory,
     ensureSeedData
   };
 }
@@ -178,6 +297,29 @@ function normalizeTitle(value) {
 
 function normalizeIndustry(value) {
   return industries.includes(value) ? value : industries[0];
+}
+
+function isMarkdownFile(fileName) {
+  return ['.md', '.markdown'].includes(path.extname(fileName).toLowerCase());
+}
+
+function compareImportEntries(a, b) {
+  if (a.isDirectory() !== b.isDirectory()) return a.isDirectory() ? -1 : 1;
+  return a.name.localeCompare(b.name, 'zh-Hans-CN', { numeric: true });
+}
+
+function cleanTitle(value) {
+  return String(value || '')
+    .replace(/\.md$/i, '')
+    .replace(/\.markdown$/i, '')
+    .trim() || '未命名';
+}
+
+function sanitizePathPart(value) {
+  return cleanTitle(value)
+    .replace(/[<>:"/\\|?*]/g, '_')
+    .replaceAll('\u0000', '_')
+    .slice(0, 120) || 'node';
 }
 
 function markdownToHtml(markdown) {

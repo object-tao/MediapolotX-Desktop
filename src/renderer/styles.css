@@ -440,16 +440,21 @@ nav {
   gap: 2px;
 }
 
+.knowledgeTreeItem {
+  position: relative;
+}
+
 .knowledgeTreeNode {
   display: flex;
   align-items: center;
   gap: 6px;
   border-radius: 6px;
-  min-height: 34px;
+  min-height: 36px;
+  padding-right: 8px;
 }
 
 .knowledgeTreeNode.active {
-  background: #e5f1f0;
+  background: #d7e4ff;
 }
 
 .treeToggle,
@@ -461,6 +466,28 @@ nav {
 .treeToggle {
   width: 24px;
   color: #536173;
+  flex: 0 0 auto;
+}
+
+.treeNodeIcon {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  font-size: 11px;
+  flex: 0 0 auto;
+}
+
+.treeNodeIcon.directory {
+  color: #2faae3;
+}
+
+.treeNodeIcon.content {
+  border-radius: 999px;
+  background: #f77b81;
+  color: #ffffff;
+  font-size: 9px;
 }
 
 .treeTitle {

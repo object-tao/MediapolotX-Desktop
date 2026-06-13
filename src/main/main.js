@@ -357,6 +357,10 @@ function registerIpc() {
     knowledgeBaseManager.deleteNode(payload.nodeId, payload.filterIndustry || 'all')
   ));
 
+  ipcMain.handle('knowledge:importDirectory', async (_event, payload) => (
+    knowledgeBaseManager.importDirectory(payload)
+  ));
+
   ipcMain.handle('social:platforms', () => socialAccountManager.platforms());
 
   ipcMain.handle('social:listAccounts', () => socialAccountManager.listAccounts());

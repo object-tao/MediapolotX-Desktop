@@ -233,6 +233,30 @@ try {
   ) {
     throw new Error('Knowledge base recursive delete smoke test failed.');
   }
+  const importSource = path.join(tempRoot, 'knowledge-import');
+  fs.mkdirSync(path.join(importSource, '01_认知基础篇'), { recursive: true });
+  fs.writeFileSync(path.join(importSource, '详细大纲.md'), '# 详细大纲\n\n导入测试');
+  fs.writeFileSync(path.join(importSource, '01_认知基础篇', '第01篇_外贸出口.md'), '# 外贸出口\n\n测试内容');
+  const importedKnowledge = await knowledgeBaseManager.importDirectory({
+    sourceRoot: importSource,
+    rootTitle: '外贸出口葵花宝典',
+    industry: '外贸行业',
+    filterIndustry: '外贸行业'
+  });
+  const importedRoot = importedKnowledge.nodes.find((node) => node.title === '外贸出口葵花宝典');
+  const importedChapter = importedKnowledge.nodes.find((node) => node.title === '01_认知基础篇');
+  const importedArticle = importedKnowledge.nodes.find((node) => node.title === '第01篇_外贸出口');
+  if (
+    importedKnowledge.imported.directories !== 2
+    || importedKnowledge.imported.files !== 2
+    || !importedRoot
+    || importedChapter?.parentId !== importedRoot.id
+    || importedArticle?.parentId !== importedChapter.id
+    || !fs.existsSync(importedArticle.filePath)
+    || !importedArticle.contentHtml.includes('测试内容')
+  ) {
+    throw new Error('Knowledge base directory import smoke test failed.');
+  }
 
   const qwenWithStaleResource = aiConfigManager.saveModel({
     name: 'Smoke Qwen Stale Resource',
