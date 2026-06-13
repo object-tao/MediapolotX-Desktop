@@ -312,11 +312,20 @@ function App() {
   const [cookieText, setCookieText] = useState('');
   const [addAccountModal, setAddAccountModal] = useState({
     open: false,
+    accountId: '',
     platform: 'xiaohongshu',
     groupName: '默认分组',
     proxyId: '',
     cookieText: '',
     showCookieInput: false
+  });
+  const [accountProfileModal, setAccountProfileModal] = useState({
+    open: false,
+    platform: 'xiaohongshu',
+    nickname: '',
+    groupName: '默认分组',
+    proxyId: '',
+    remark: ''
   });
   const [publishForm, setPublishForm] = useState({
     title: '',
@@ -611,17 +620,19 @@ function App() {
     setMessage('请在弹出的登录窗口中完成登录，系统会自动识别账号...');
     try {
       const account = await window.mediapolotx.social.startLoginAccount({
+        accountId: addAccountModal.accountId || undefined,
         platform: addAccountModal.platform,
         groupName: addAccountModal.groupName,
-        proxyId: addAccountModal.proxyId
+        proxyId: addAccountModal.proxyId,
+        nickname: addAccountModal.nickname
       });
       await refreshSocialAccounts();
       setSelectedSocialAccountId(account.id);
-      setAddAccountModal((current) => ({ ...current, open: false, showCookieInput: false, cookieText: '' }));
-      setMessage(`账号已添加：${account.nickname}`);
+      setAddAccountModal((current) => ({ ...current, open: false, accountId: '', showCookieInput: false, cookieText: '' }));
+      setMessage(`账号已绑定：${account.nickname}`);
       await openSocialAccount(account);
     } catch (error) {
-      setMessage(`添加账号失败：${cleanRemoteError(error)}`);
+      setMessage(`绑定账号失败：${cleanRemoteError(error)}`);
     } finally {
       setBusy(false);
     }
@@ -633,11 +644,12 @@ function App() {
     try {
       const platform = socialPlatforms.find((item) => item.value === addAccountModal.platform);
       const account = await window.mediapolotx.social.saveAccount({
+        id: addAccountModal.accountId || undefined,
         platform: addAccountModal.platform,
-        nickname: `${platform?.label || '媒体'}账号`,
+        nickname: addAccountModal.nickname || `${platform?.label || '媒体'}账号`,
         groupName: addAccountModal.groupName,
         proxyId: addAccountModal.proxyId,
-        status: 'unknown'
+        status: 'online'
       });
       await window.mediapolotx.social.importCookies({
         accountId: account.id,
@@ -645,11 +657,73 @@ function App() {
       });
       await refreshSocialAccounts();
       setSelectedSocialAccountId(account.id);
-      setAddAccountModal((current) => ({ ...current, open: false, showCookieInput: false, cookieText: '' }));
-      setMessage(`Cookie 已导入：${account.nickname}`);
+      setAddAccountModal((current) => ({ ...current, open: false, accountId: '', showCookieInput: false, cookieText: '' }));
+      setMessage(`Cookie 已绑定：${account.nickname}`);
       await openSocialAccount(account);
     } catch (error) {
-      setMessage(`Cookie 添加失败：${cleanRemoteError(error)}`);
+      setMessage(`Cookie 绑定失败：${cleanRemoteError(error)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveSocialAccountProfile() {
+    if (!accountProfileModal.nickname.trim()) {
+      setMessage('请填写账号名称');
+      return;
+    }
+    setBusy(true);
+    try {
+      const account = await window.mediapolotx.social.saveAccount({
+        platform: accountProfileModal.platform,
+        nickname: accountProfileModal.nickname.trim(),
+        groupName: accountProfileModal.groupName.trim() || '默认分组',
+        proxyId: accountProfileModal.proxyId,
+        remark: accountProfileModal.remark.trim(),
+        status: 'unbound'
+      });
+      await refreshSocialAccounts();
+      setSelectedSocialAccountId(account.id);
+      setAccountProfileModal((current) => ({ ...current, open: false, nickname: '', remark: '' }));
+      setMessage(`账号已创建：${account.nickname}`);
+    } catch (error) {
+      setMessage(`创建账号失败：${cleanRemoteError(error)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function openBindAccountModal(account = null) {
+    const platform = account?.platform || 'xiaohongshu';
+    const platformMeta = socialPlatforms.find((item) => item.value === platform);
+    setAddAccountModal({
+      open: true,
+      accountId: account?.id || '',
+      platform,
+      nickname: account?.nickname || `${platformMeta?.label || '媒体'}账号`,
+      groupName: account?.groupName || '默认分组',
+      proxyId: account?.proxyId || '',
+      cookieText: '',
+      showCookieInput: false
+    });
+  }
+
+  async function unbindSocialAccount(account) {
+    if (!account) return;
+    setBusy(true);
+    try {
+      await window.mediapolotx.social.clearCookies(account.id);
+      await window.mediapolotx.social.hideBrowser();
+      const saved = await window.mediapolotx.social.saveAccount({
+        ...account,
+        status: 'unbound',
+        platformUserId: '',
+        avatarUrl: ''
+      });
+      setSocialAccounts((current) => current.map((item) => (item.id === saved.id ? saved : item)));
+      setMessage('账号已解绑');
+    } catch (error) {
+      setMessage(`解绑账号失败：${cleanRemoteError(error)}`);
     } finally {
       setBusy(false);
     }
@@ -708,6 +782,10 @@ function App() {
 
   async function openSocialAccount(account = selectedSocialAccount, target = 'homeUrl') {
     if (!account) return;
+    if (!isSocialAccountBound(account)) {
+      setMessage('该账号尚未绑定，请先绑定登录态');
+      return;
+    }
     const bounds = getSocialBrowserBounds();
     if (!bounds) return;
     const state = target === 'homeUrl'
@@ -737,8 +815,10 @@ function App() {
         accountId: selectedSocialAccount.id,
         cookies: cookieText
       });
+      const saved = await window.mediapolotx.social.saveAccount({ ...selectedSocialAccount, status: 'online' });
+      setSocialAccounts((current) => current.map((item) => (item.id === saved.id ? saved : item)));
       setMessage(`已导入 ${result.count} 条 Cookie`);
-      await openSocialAccount(selectedSocialAccount);
+      await openSocialAccount(saved);
     } catch (error) {
       setMessage(`Cookie 导入失败：${cleanRemoteError(error)}`);
     }
@@ -746,10 +826,8 @@ function App() {
 
   async function clearSocialCookies() {
     if (!selectedSocialAccount) return;
-    await window.mediapolotx.social.clearCookies(selectedSocialAccount.id);
     setCookieText('');
-    setMessage('Cookie/session 已清理');
-    await openSocialAccount(selectedSocialAccount);
+    await unbindSocialAccount(selectedSocialAccount);
   }
 
   async function openPublishPageAndFill() {
@@ -2041,7 +2119,10 @@ function App() {
             <div className="panel socialAccountPanel">
               <div className="panelHeader">
                 <h2>媒体账号</h2>
-                <button type="button" onClick={() => setAddAccountModal((current) => ({ ...current, open: true }))}>+ 添加账号</button>
+                <div className="tableActions">
+                  <button type="button" onClick={() => setAccountProfileModal((current) => ({ ...current, open: true }))}>+ 添加账号</button>
+                  <button type="button" onClick={() => openBindAccountModal()}>绑定新账号</button>
+                </div>
               </div>
               <SocialAccountList
                 accounts={socialAccounts}
@@ -2050,10 +2131,13 @@ function App() {
                 selectedId={selectedSocialAccountId}
                 onSelect={(account) => {
                   setSelectedSocialAccountId(account.id);
-                  openSocialAccount(account);
+                  if (isSocialAccountBound(account)) openSocialAccount(account);
+                  else setMessage('该账号尚未绑定，请先绑定登录态');
                 }}
                 onDelete={deleteSocialAccount}
                 onProxyChange={updateSocialAccountProxy}
+                onBind={openBindAccountModal}
+                onUnbind={unbindSocialAccount}
               />
             </div>
             <div className="panel socialBrowserPanel">
@@ -2073,9 +2157,9 @@ function App() {
               </div>
               <div className="cookiePanel">
                 <div className="actions actionWrap">
-                  <button type="button" onClick={exportSocialCookies} disabled={!selectedSocialAccount}>导出 Cookie</button>
+                  <button type="button" onClick={exportSocialCookies} disabled={!isSocialAccountBound(selectedSocialAccount)}>导出 Cookie</button>
                   <button type="button" onClick={importSocialCookies} disabled={!selectedSocialAccount || !cookieText.trim()}>导入 Cookie</button>
-                  <button type="button" className="dangerButton" onClick={clearSocialCookies} disabled={!selectedSocialAccount}>清理登录态</button>
+                  <button type="button" className="dangerButton" onClick={clearSocialCookies} disabled={!isSocialAccountBound(selectedSocialAccount)}>清理登录态</button>
                 </div>
                 <textarea value={cookieText} onChange={(event) => setCookieText(event.target.value)} placeholder="Cookie JSON，导出后可保存，导入时粘贴到这里" />
               </div>
@@ -2111,7 +2195,7 @@ function App() {
                     ))}
                   </select>
                 </label>
-                <button type="button" onClick={() => openSocialAccount(selectedSocialAccount, 'worksUrl')} disabled={!selectedSocialAccount}>打开作品管理</button>
+                <button type="button" onClick={() => openSocialAccount(selectedSocialAccount, 'worksUrl')} disabled={!isSocialAccountBound(selectedSocialAccount)}>打开作品管理</button>
               </div>
             </div>
             <div className="panel socialBrowserPanel">
@@ -2712,6 +2796,17 @@ function App() {
         )}
 
         {!['sync', 'socialAccounts', 'socialWorks', 'localWorks', 'oneClickPublish', 'proxyConfig', 'aiParamLibrary', 'knowledgeBase'].includes(activeView) && <TaskList tasks={tasks} compact onOpenPath={openPath} />}
+        {accountProfileModal.open && (
+          <AccountProfileModal
+            modal={accountProfileModal}
+            platforms={mediaPlatformCards}
+            proxies={networkProxies}
+            busy={busy}
+            onChange={setAccountProfileModal}
+            onClose={() => setAccountProfileModal((current) => ({ ...current, open: false }))}
+            onSave={saveSocialAccountProfile}
+          />
+        )}
         {addAccountModal.open && (
           <AddMediaAccountModal
             modal={addAccountModal}
@@ -4067,7 +4162,7 @@ function formatAiDetectionSummary(file) {
   return '频域分析未发现明显平台 AI 风险';
 }
 
-function SocialAccountList({ accounts, platforms, proxies, selectedId, onSelect, onDelete, onProxyChange }) {
+function SocialAccountList({ accounts, platforms, proxies, selectedId, onSelect, onDelete, onProxyChange, onBind, onUnbind }) {
   const groups = accounts.reduce((map, account) => {
     const groupName = account.groupName || '默认分组';
     if (!map.has(groupName)) map.set(groupName, []);
@@ -4095,6 +4190,9 @@ function SocialAccountList({ accounts, platforms, proxies, selectedId, onSelect,
               <span>
                 <strong>{account.nickname}</strong>
                 <small>{platformLabel(platforms, account.platform)} {account.platformUserId || ''}</small>
+                <small className={isSocialAccountBound(account) ? 'accountBound' : 'accountUnbound'}>
+                  {isSocialAccountBound(account) ? '已绑定' : '未绑定'}
+                </small>
                 <label className="inlineSelect" onClick={(event) => event.stopPropagation()}>
                   代理
                   <select value={account.proxyId || ''} onChange={(event) => onProxyChange(account, event.target.value)}>
@@ -4106,15 +4204,78 @@ function SocialAccountList({ accounts, platforms, proxies, selectedId, onSelect,
                 </label>
                 {account.remark && <small>{account.remark}</small>}
               </span>
-              <button type="button" className="dangerButton" onClick={(event) => {
-                event.stopPropagation();
-                onDelete(account.id);
-              }}>删除</button>
+              <span className="socialAccountActions" onClick={(event) => event.stopPropagation()}>
+                {isSocialAccountBound(account) ? (
+                  <button type="button" className="secondaryButton" onClick={() => onUnbind(account)}>解绑</button>
+                ) : (
+                  <button type="button" onClick={() => onBind(account)}>绑定</button>
+                )}
+                <button type="button" className="dangerButton" onClick={() => onDelete(account.id)}>删除</button>
+              </span>
             </div>
           ))}
         </div>
       ))}
       {accounts.length === 0 && <div className="empty">暂无账号</div>}
+    </div>
+  );
+}
+
+function AccountProfileModal({ modal, platforms, proxies, busy, onChange, onClose, onSave }) {
+  const selectedPlatform = platforms.find((platform) => platform.value === modal.platform);
+  return (
+    <div className="modalBackdrop">
+      <div className="mediaAccountModal accountProfileModal">
+        <div className="modalHeader">
+          <h2>添加账号</h2>
+          <button type="button" onClick={onClose}>×</button>
+        </div>
+        <section className="modalSection">
+          <h3>所属平台</h3>
+          <div className="platformGrid">
+            {platforms.map((platform) => (
+              <button
+                type="button"
+                key={platform.value}
+                className={`platformCard ${modal.platform === platform.value ? 'selected' : ''}`}
+                disabled={!platform.enabled || busy}
+                onClick={() => onChange((current) => ({ ...current, platform: platform.value }))}
+              >
+                <span>{platform.icon}</span>
+                <strong>{platform.label}</strong>
+                {!platform.enabled && <em>暂未支持</em>}
+              </button>
+            ))}
+          </div>
+        </section>
+        <section className="modalSection accountProfileFields">
+          <label>
+            账号名称
+            <input value={modal.nickname} onChange={(event) => onChange((current) => ({ ...current, nickname: event.target.value }))} placeholder={`${selectedPlatform?.label || '媒体'}账号名称`} />
+          </label>
+          <label>
+            分组
+            <input value={modal.groupName} onChange={(event) => onChange((current) => ({ ...current, groupName: event.target.value }))} />
+          </label>
+          <label>
+            使用代理IP
+            <select value={modal.proxyId} onChange={(event) => onChange((current) => ({ ...current, proxyId: event.target.value }))}>
+              <option value="">不使用</option>
+              {proxies.map((proxy) => (
+                <option key={proxy.id} value={proxy.id}>{proxy.name} / {proxy.type}://{proxy.host}:{proxy.port}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            备注
+            <input value={modal.remark} onChange={(event) => onChange((current) => ({ ...current, remark: event.target.value }))} placeholder="可选" />
+          </label>
+        </section>
+        <div className="modalActions">
+          <button type="button" onClick={onClose}>取消</button>
+          <button type="button" className="primaryButton" onClick={onSave} disabled={busy || !selectedPlatform?.enabled || !modal.nickname.trim()}>保存账号</button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -4126,7 +4287,7 @@ function AddMediaAccountModal({ modal, platforms, proxies, busy, onChange, onClo
     <div className="modalBackdrop">
       <div className="mediaAccountModal">
         <div className="modalHeader">
-          <h2>添加媒体账号</h2>
+          <h2>{modal.accountId ? '绑定账号' : '绑定新账号'}</h2>
           <button type="button" onClick={onClose}>×</button>
         </div>
         <section className="modalSection">
@@ -4177,9 +4338,9 @@ function AddMediaAccountModal({ modal, platforms, proxies, busy, onChange, onClo
             }}
             disabled={busy || !selectedPlatform?.enabled}
           >
-            导入CK(cookie)添加
+            导入CK(cookie)绑定
           </button>
-          <button type="button" className="primaryButton" onClick={onLoginAdd} disabled={busy || !selectedPlatform?.enabled}>打开登录页面添加</button>
+          <button type="button" className="primaryButton" onClick={onLoginAdd} disabled={busy || !selectedPlatform?.enabled}>打开登录页面绑定</button>
         </div>
       </div>
     </div>
@@ -4187,24 +4348,29 @@ function AddMediaAccountModal({ modal, platforms, proxies, busy, onChange, onClo
 }
 
 function SocialBrowserToolbar({ account, state, onHome, onPublish, onWorks, onData, onBack, onForward, onReload }) {
+  const bound = isSocialAccountBound(account);
   return (
     <div className="socialToolbar">
       <div className="actions actionWrap">
-        <button type="button" onClick={onBack} disabled={!account || !state.canGoBack}>后退</button>
-        <button type="button" onClick={onForward} disabled={!account || !state.canGoForward}>前进</button>
-        <button type="button" onClick={onReload} disabled={!account}>刷新</button>
-        <button type="button" onClick={onHome} disabled={!account}>主页</button>
-        <button type="button" onClick={onPublish} disabled={!account}>发布</button>
-        <button type="button" onClick={onWorks} disabled={!account}>作品</button>
-        <button type="button" onClick={onData} disabled={!account}>数据</button>
+        <button type="button" onClick={onBack} disabled={!bound || !state.canGoBack}>后退</button>
+        <button type="button" onClick={onForward} disabled={!bound || !state.canGoForward}>前进</button>
+        <button type="button" onClick={onReload} disabled={!bound}>刷新</button>
+        <button type="button" onClick={onHome} disabled={!bound}>主页</button>
+        <button type="button" onClick={onPublish} disabled={!bound}>发布</button>
+        <button type="button" onClick={onWorks} disabled={!bound}>作品</button>
+        <button type="button" onClick={onData} disabled={!bound}>数据</button>
       </div>
-      <div className="socialAddress">{state.url || '未打开平台后台'}</div>
+      <div className="socialAddress">{bound ? (state.url || '未打开平台后台') : '账号未绑定，请先绑定登录态'}</div>
     </div>
   );
 }
 
 function platformLabel(platforms, value) {
   return platforms.find((platform) => platform.value === value)?.label || value;
+}
+
+function isSocialAccountBound(account) {
+  return Boolean(account && account.status !== 'unbound');
 }
 
 function SimpleImageFileList({ title, files, selectedPaths, onToggle, onSelectAll, onClear }) {

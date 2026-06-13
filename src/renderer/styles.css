@@ -728,6 +728,42 @@ nav {
   font-size: 12px;
 }
 
+.accountBound,
+.accountUnbound {
+  width: fit-content;
+  margin-top: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px !important;
+}
+
+.accountBound {
+  color: #24705f !important;
+  background: #e7f6f1;
+}
+
+.accountUnbound {
+  color: #9a5b1f !important;
+  background: #fff3df;
+}
+
+.socialAccountActions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.socialAccountActions button {
+  min-width: 58px;
+  padding: 7px 10px;
+}
+
+.accountProfileFields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
 .inlineSelect {
   margin-top: 6px;
   display: grid;

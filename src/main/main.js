@@ -612,7 +612,7 @@ async function startSocialLoginAccount(payload = {}) {
     const account = socialAccountManager.saveAccount({
       id: accountId,
       platform: platformKey,
-      nickname: profile.nickname || platform.label,
+      nickname: profile.nickname || payload.nickname || platform.label,
       platformUserId: profile.platformUserId || '',
       avatarUrl: profile.avatarUrl || '',
       groupName: payload.groupName || '默认分组',
