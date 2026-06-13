@@ -326,7 +326,8 @@ function markdownToHtml(markdown) {
   const lines = String(markdown || '').split(/\r?\n/);
   const html = [];
   let listOpen = false;
-  for (const line of lines) {
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
     const trimmed = line.trim();
     if (!trimmed) {
       if (listOpen) {
@@ -342,6 +343,43 @@ function markdownToHtml(markdown) {
         listOpen = false;
       }
       html.push(`<h${heading[1].length}>${inlineMarkdown(heading[2])}</h${heading[1].length}>`);
+      continue;
+    }
+    if (/^---+$/.test(trimmed)) {
+      if (listOpen) {
+        html.push('</ul>');
+        listOpen = false;
+      }
+      html.push('<hr>');
+      continue;
+    }
+    const quote = trimmed.match(/^>\s*(.+)$/);
+    if (quote) {
+      if (listOpen) {
+        html.push('</ul>');
+        listOpen = false;
+      }
+      html.push(`<blockquote>${inlineMarkdown(quote[1])}</blockquote>`);
+      continue;
+    }
+    if (isTableRow(trimmed) && isTableSeparator(lines[index + 1]?.trim())) {
+      if (listOpen) {
+        html.push('</ul>');
+        listOpen = false;
+      }
+      const headers = parseTableCells(trimmed);
+      html.push('<div class="knowledgeTableWrap"><table><thead><tr>');
+      for (const header of headers) html.push(`<th>${inlineMarkdown(header)}</th>`);
+      html.push('</tr></thead><tbody>');
+      index += 2;
+      while (index < lines.length && isTableRow(lines[index].trim())) {
+        html.push('<tr>');
+        for (const cell of parseTableCells(lines[index].trim())) html.push(`<td>${inlineMarkdown(cell)}</td>`);
+        html.push('</tr>');
+        index += 1;
+      }
+      index -= 1;
+      html.push('</tbody></table></div>');
       continue;
     }
     const bullet = trimmed.match(/^[-*]\s+(.+)$/);
@@ -361,6 +399,22 @@ function markdownToHtml(markdown) {
   }
   if (listOpen) html.push('</ul>');
   return html.join('\n');
+}
+
+function isTableRow(value) {
+  return /^\|.+\|$/.test(value) && value.split('|').length >= 3;
+}
+
+function isTableSeparator(value) {
+  return /^\|?[\s:-]+(?:\|[\s:-]+)+\|?$/.test(value || '');
+}
+
+function parseTableCells(value) {
+  return value
+    .replace(/^\|/, '')
+    .replace(/\|$/, '')
+    .split('|')
+    .map((cell) => cell.trim());
 }
 
 function inlineMarkdown(value) {

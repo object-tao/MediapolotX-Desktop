@@ -501,7 +501,8 @@ nav {
 }
 
 .knowledgeTreePanel {
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   max-height: calc(100vh - 220px);
 }
 
@@ -584,6 +585,7 @@ nav {
   color: #102033;
   font-size: 15px;
   line-height: 1.72;
+  max-width: 920px;
 }
 
 .knowledgeRichText h1,
@@ -610,8 +612,65 @@ nav {
   margin: 0 0 12px;
 }
 
+.knowledgeRichText p {
+  color: #1f3148;
+}
+
 .knowledgeRichText ul {
   padding-left: 24px;
+}
+
+.knowledgeRichText strong {
+  color: #07162b;
+  font-weight: 700;
+}
+
+.knowledgeRichText blockquote {
+  margin: 14px 0;
+  padding: 10px 14px;
+  border-left: 3px solid #2b7a78;
+  border-radius: 0 6px 6px 0;
+  background: #f5fbfa;
+  color: #33485f;
+}
+
+.knowledgeTableWrap {
+  width: 100%;
+  overflow-x: auto;
+  margin: 14px 0 18px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.knowledgeRichText table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  background: #ffffff;
+}
+
+.knowledgeRichText th,
+.knowledgeRichText td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #e8edf3;
+  border-right: 1px solid #eef2f6;
+  text-align: left;
+  vertical-align: top;
+}
+
+.knowledgeRichText th:last-child,
+.knowledgeRichText td:last-child {
+  border-right: 0;
+}
+
+.knowledgeRichText th {
+  background: #f5f7fa;
+  color: #2b3d52;
+  font-weight: 700;
+}
+
+.knowledgeRichText tr:last-child td {
+  border-bottom: 0;
 }
 
 .knowledgeEditorModal {
