@@ -2990,11 +2990,14 @@ function KnowledgeBaseView({
           {selectedNode ? (
             <>
               <div className="knowledgeContentHeader">
-                <div>
+                <div className="knowledgeContentTitle">
                   <h2>{selectedNode.title}</h2>
-                  <span>{selectedNode.industry} · {selectedNode.filePath || '未绑定文件'}</span>
+                  <div className="knowledgeContentMeta">
+                    <span className="metaPill">{selectedNode.industry}</span>
+                    <span className="knowledgePath" title={selectedNode.filePath || '未绑定文件'}>{selectedNode.filePath || '未绑定文件'}</span>
+                  </div>
                 </div>
-                <div className="tableActions">
+                <div className="tableActions knowledgeActions">
                   <button type="button" onClick={() => onAddChild(selectedNode)} disabled={busy}>新增子节点</button>
                   <button type="button" onClick={() => onEdit(selectedNode)} disabled={busy}>编辑</button>
                   <button type="button" className="dangerButton" onClick={() => onDelete(selectedNode)} disabled={busy}>删除</button>
