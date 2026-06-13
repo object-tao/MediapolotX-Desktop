@@ -14,6 +14,7 @@ const articleRewriter = require('../src/modules/articleRewriter');
 const localWorkImporter = require('../src/modules/localWorkImporter');
 const localWorkCopywriter = require('../src/modules/localWorkCopywriter');
 const localWorkSpeechwriter = require('../src/modules/localWorkSpeechwriter');
+const localWorkPodcastWriter = require('../src/modules/localWorkPodcastWriter');
 const { createAiConfigManager } = require('../src/modules/aiConfigManager');
 const { createSocialAccountManager } = require('../src/modules/socialAccountManager');
 
@@ -340,6 +341,34 @@ line two" },
     || speechWork.speechScriptSpeakerCount !== 2
   ) {
     throw new Error('Local work speechwriter smoke test failed.');
+  }
+  const podcastPromptTemplate = localWorkPodcastWriter.buildPromptTemplate({
+    sourceTitle: updatedLocalWork.title,
+    copyContent: updatedLocalWork.content,
+    speakerCount: 3
+  });
+  const generatedPodcast = await localWorkPodcastWriter.generateLocalWorkPodcast(
+    updatedLocalWork,
+    { modelId: qwenWithStaleResource.id, promptTemplate: podcastPromptTemplate, speakerCount: 3 },
+    async (options) => {
+      if (!options.messages[1].content.includes('人物数：3') || !options.messages[1].content.includes('至少 10 分钟以上')) {
+        throw new Error('Local work podcast writer prompt smoke test failed.');
+      }
+      return {
+        modelId: qwenWithStaleResource.id,
+        modelName: 'Smoke Qwen',
+        content: 'A：欢迎来到本期播客。\nB：今天我们聊海关公告。\nC：企业需要关注执行细节。'
+      };
+    }
+  );
+  const podcastWorks = localWorkImporter.updateWorkPodcastScript(db, generatedPodcast);
+  const podcastWork = podcastWorks.find((work) => work.id === localWorkId);
+  if (
+    podcastWork.podcastScriptStatus !== '已生成'
+    || !podcastWork.podcastScript.includes('本期播客')
+    || podcastWork.podcastSpeakerCount !== 3
+  ) {
+    throw new Error('Local work podcast writer smoke test failed.');
   }
   const publishRecordWorks = localWorkImporter.updatePublishRecord(db, {
     targetType: 'child',

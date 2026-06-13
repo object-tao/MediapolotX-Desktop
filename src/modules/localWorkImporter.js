@@ -217,6 +217,12 @@ function listImportedWorks(db) {
     speechScriptPrompt: row.speech_script_prompt || '',
     speechScriptSpeakerCount: Number(row.speech_script_speaker_count || 1),
     speechScriptUpdatedAt: row.speech_script_updated_at || '',
+    podcastScript: row.podcast_script || '',
+    podcastScriptStatus: row.podcast_script_status || (row.podcast_script ? '已生成' : '未生成'),
+    podcastScriptModelId: row.podcast_script_model_id || '',
+    podcastScriptPrompt: row.podcast_script_prompt || '',
+    podcastSpeakerCount: Number(row.podcast_speaker_count || 2),
+    podcastScriptUpdatedAt: row.podcast_script_updated_at || '',
     publishStatus: row.publish_status,
     publishRecords: publishMap.get(`main:${row.id}`) || [],
     children: (childMap.get(row.id) || []).map((child) => ({
@@ -575,6 +581,40 @@ function updateWorkSpeechScript(db, {
   return listImportedWorks(db);
 }
 
+function updateWorkPodcastScript(db, {
+  workId,
+  script,
+  status = '已生成',
+  modelId = '',
+  promptTemplate = '',
+  speakerCount = 2
+}) {
+  if (!workId) throw new Error('缺少作品 ID');
+  const work = db.prepare('SELECT id FROM local_works WHERE id = @workId').get({ workId });
+  if (!work) throw new Error('作品不存在');
+  const now = nowIso();
+  db.prepare(`
+    UPDATE local_works
+    SET podcast_script = @script,
+        podcast_script_status = @status,
+        podcast_script_model_id = @modelId,
+        podcast_script_prompt = @promptTemplate,
+        podcast_speaker_count = @speakerCount,
+        podcast_script_updated_at = @updatedAt,
+        updated_at = @updatedAt
+    WHERE id = @workId
+  `).run({
+    workId,
+    script: String(script || ''),
+    status: normalizeScriptStatus(status, script),
+    modelId: modelId || '',
+    promptTemplate: promptTemplate || '',
+    speakerCount: Math.min(Math.max(Math.round(Number(speakerCount || 2)), 1), 5),
+    updatedAt: now
+  });
+  return listImportedWorks(db);
+}
+
 async function deleteImportedWork(db, { workId, targetRoot }) {
   if (!workId) throw new Error('缺少作品 ID');
   if (!targetRoot) throw new Error('请先设置作品路径');
@@ -602,6 +642,10 @@ function normalizePlatformPublishStatus(status) {
 }
 
 function normalizeSpeechScriptStatus(status, script) {
+  return normalizeScriptStatus(status, script);
+}
+
+function normalizeScriptStatus(status, script) {
   if (script) return '已生成';
   const allowed = new Set(['未生成', '生成中', '已生成', '生成失败']);
   return allowed.has(status) ? status : '未生成';
@@ -622,5 +666,6 @@ module.exports = {
   updatePublishRecord,
   updateWorkCopy,
   updateWorkSpeechScript,
+  updateWorkPodcastScript,
   deleteImportedWork
 };

@@ -84,6 +84,12 @@ function migrate(db) {
       speech_script_prompt TEXT,
       speech_script_speaker_count INTEGER NOT NULL DEFAULT 1,
       speech_script_updated_at TEXT,
+      podcast_script TEXT NOT NULL DEFAULT '',
+      podcast_script_status TEXT NOT NULL DEFAULT '未生成',
+      podcast_script_model_id TEXT,
+      podcast_script_prompt TEXT,
+      podcast_speaker_count INTEGER NOT NULL DEFAULT 2,
+      podcast_script_updated_at TEXT,
       publish_status TEXT NOT NULL DEFAULT '未发布',
       source_root TEXT,
       created_at TEXT NOT NULL,
@@ -130,6 +136,12 @@ function migrate(db) {
   addColumnIfMissing(db, 'local_works', 'speech_script_prompt', 'TEXT');
   addColumnIfMissing(db, 'local_works', 'speech_script_speaker_count', 'INTEGER NOT NULL DEFAULT 1');
   addColumnIfMissing(db, 'local_works', 'speech_script_updated_at', 'TEXT');
+  addColumnIfMissing(db, 'local_works', 'podcast_script', "TEXT NOT NULL DEFAULT ''");
+  addColumnIfMissing(db, 'local_works', 'podcast_script_status', "TEXT NOT NULL DEFAULT '未生成'");
+  addColumnIfMissing(db, 'local_works', 'podcast_script_model_id', 'TEXT');
+  addColumnIfMissing(db, 'local_works', 'podcast_script_prompt', 'TEXT');
+  addColumnIfMissing(db, 'local_works', 'podcast_speaker_count', 'INTEGER NOT NULL DEFAULT 2');
+  addColumnIfMissing(db, 'local_works', 'podcast_script_updated_at', 'TEXT');
 }
 
 function addColumnIfMissing(db, tableName, columnName, columnDefinition) {

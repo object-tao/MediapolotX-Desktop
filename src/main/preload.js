@@ -62,8 +62,10 @@ contextBridge.exposeInMainWorld('mediapolotx', {
     updatePublishRecord: (payload) => ipcRenderer.invoke('localWorks:updatePublishRecord', payload),
     getCopyPromptTemplate: (payload) => ipcRenderer.invoke('localWorks:getCopyPromptTemplate', payload),
     getSpeechPromptTemplate: (payload) => ipcRenderer.invoke('localWorks:getSpeechPromptTemplate', payload),
+    getPodcastPromptTemplate: (payload) => ipcRenderer.invoke('localWorks:getPodcastPromptTemplate', payload),
     generateCopy: (payload) => ipcRenderer.invoke('localWorks:generateCopy', payload),
     generateSpeech: (payload) => ipcRenderer.invoke('localWorks:generateSpeech', payload),
+    generatePodcast: (payload) => ipcRenderer.invoke('localWorks:generatePodcast', payload),
     delete: (payload) => ipcRenderer.invoke('localWorks:delete', payload),
     onCopyProgress: (callback) => {
       const listener = (_event, payload) => callback(payload);
@@ -74,6 +76,11 @@ contextBridge.exposeInMainWorld('mediapolotx', {
       const listener = (_event, payload) => callback(payload);
       ipcRenderer.on('localWorks:speechProgress', listener);
       return () => ipcRenderer.removeListener('localWorks:speechProgress', listener);
+    },
+    onPodcastProgress: (callback) => {
+      const listener = (_event, payload) => callback(payload);
+      ipcRenderer.on('localWorks:podcastProgress', listener);
+      return () => ipcRenderer.removeListener('localWorks:podcastProgress', listener);
     }
   },
   social: {

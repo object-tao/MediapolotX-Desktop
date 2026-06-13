@@ -15,6 +15,7 @@ const articleRewriter = require('../modules/articleRewriter');
 const localWorkImporter = require('../modules/localWorkImporter');
 const localWorkCopywriter = require('../modules/localWorkCopywriter');
 const localWorkSpeechwriter = require('../modules/localWorkSpeechwriter');
+const localWorkPodcastWriter = require('../modules/localWorkPodcastWriter');
 const { createAiConfigManager } = require('../modules/aiConfigManager');
 const { createSocialAccountManager } = require('../modules/socialAccountManager');
 const { createProxyManager } = require('../modules/proxyManager');
@@ -184,6 +185,18 @@ function registerIpc() {
     });
   });
 
+  ipcMain.handle('localWorks:getPodcastPromptTemplate', (_event, payload) => {
+    const works = localWorkImporter.listImportedWorks(db);
+    const work = works.find((item) => item.id === payload.workId);
+    if (!work) throw new Error('作品不存在');
+    return localWorkPodcastWriter.buildPromptTemplate({
+      sourceTitle: work.title,
+      copyTitle: work.title,
+      copyContent: work.content || '',
+      speakerCount: payload.speakerCount || work.podcastSpeakerCount || 2
+    });
+  });
+
   ipcMain.handle('localWorks:generateCopy', async (event, payload) => {
     const works = localWorkImporter.listImportedWorks(db);
     const work = works.find((item) => item.id === payload.workId);
@@ -212,6 +225,23 @@ function registerIpc() {
       (progress) => event.sender.send('localWorks:speechProgress', progress)
     );
     const updatedWorks = localWorkImporter.updateWorkSpeechScript(db, generated);
+    return {
+      generated,
+      works: updatedWorks
+    };
+  });
+
+  ipcMain.handle('localWorks:generatePodcast', async (event, payload) => {
+    const works = localWorkImporter.listImportedWorks(db);
+    const work = works.find((item) => item.id === payload.workId);
+    if (!work) throw new Error('作品不存在');
+    const generated = await localWorkPodcastWriter.generateLocalWorkPodcast(
+      work,
+      payload,
+      (options) => aiConfigManager.completeText(options),
+      (progress) => event.sender.send('localWorks:podcastProgress', progress)
+    );
+    const updatedWorks = localWorkImporter.updateWorkPodcastScript(db, generated);
     return {
       generated,
       works: updatedWorks
