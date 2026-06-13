@@ -2834,6 +2834,7 @@ function App() {
             selectedChild={selectedChildWork}
             onSelectChild={setSelectedChildWork}
             onEditPublishRecords={(child) => openPublishRecordEditor('child', child)}
+            onOpenPath={openPath}
             onBack={() => setSelectedChildWork(null)}
             onClose={() => {
               setSelectedLocalWork(null);
@@ -2847,6 +2848,7 @@ function App() {
             subtitle={`主作品 · ${selectedMainWork.publishStatus}`}
             item={mainWorkPreviewItem(selectedMainWork)}
             onEditPublishRecords={() => openPublishRecordEditor('main', selectedMainWork)}
+            onOpenPath={openPath}
             onClose={() => setSelectedMainWork(null)}
           />
         )}
@@ -3842,7 +3844,7 @@ function LocalWorkPodcastWriterModal({ value, models, busy, progress, onChange, 
   );
 }
 
-function LocalWorkChildrenModal({ work, selectedChild, onSelectChild, onEditPublishRecords, onBack, onClose }) {
+function LocalWorkChildrenModal({ work, selectedChild, onSelectChild, onEditPublishRecords, onOpenPath, onBack, onClose }) {
   return (
     <div className="modalBackdrop">
       <div className="mediaAccountModal localChildrenModal">
@@ -3859,7 +3861,7 @@ function LocalWorkChildrenModal({ work, selectedChild, onSelectChild, onEditPubl
               <span>平台发布：{publishSummaryText(selectedChild.publishRecords)}</span>
               <button type="button" onClick={() => onEditPublishRecords(selectedChild)}>编辑平台状态</button>
             </div>
-            <LocalWorkPostPreview item={selectedChild} />
+            <LocalWorkPostPreview item={selectedChild} onOpenPath={onOpenPath} />
           </>
         ) : (
           <div className="localChildMasonry">
@@ -3896,7 +3898,7 @@ function LocalWorkChildrenModal({ work, selectedChild, onSelectChild, onEditPubl
   );
 }
 
-function LocalWorkPreviewModal({ title, subtitle, item, onEditPublishRecords, onClose }) {
+function LocalWorkPreviewModal({ title, subtitle, item, onEditPublishRecords, onOpenPath, onClose }) {
   return (
     <div className="modalBackdrop">
       <div className="mediaAccountModal localChildrenModal">
@@ -3907,7 +3909,7 @@ function LocalWorkPreviewModal({ title, subtitle, item, onEditPublishRecords, on
           </div>
           <button className="iconButton" onClick={onClose}>×</button>
         </div>
-        <LocalWorkPostPreview item={item} />
+        <LocalWorkPostPreview item={item} onOpenPath={onOpenPath} />
         <div className="modalActions">
           <button type="button" className="secondaryButton" onClick={onEditPublishRecords}>编辑平台状态</button>
           <button type="button" onClick={onClose}>关闭</button>
@@ -3947,7 +3949,7 @@ function LocalWorkTagModal({ editor, onChange, onSave, onClose }) {
   );
 }
 
-function LocalWorkPostPreview({ item }) {
+function LocalWorkPostPreview({ item, onOpenPath }) {
   return (
     <div className="xhsPreview">
       <div className="xhsImageStrip">
@@ -3958,6 +3960,14 @@ function LocalWorkPostPreview({ item }) {
         ) : (
           <div className="imagePlaceholder">暂无图片</div>
         )}
+        <button
+          type="button"
+          className="secondaryButton openImageFolderButton"
+          onClick={() => onOpenPath?.(item.folderPath)}
+          disabled={!item.folderPath}
+        >
+          打开文件目录
+        </button>
       </div>
       <article className="xhsPostBody">
         <div className="promptTagList">
@@ -4503,6 +4513,7 @@ function mainWorkPreviewItem(work) {
     id: work.id,
     platform: '主作品',
     title: work.title,
+    folderPath: work.folderPath,
     content: work.content || '',
     tags: work.tags || [],
     publishStatus: work.publishStatus,

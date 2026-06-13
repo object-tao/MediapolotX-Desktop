@@ -1501,6 +1501,12 @@ textarea {
   background: #e9edf3;
 }
 
+.openImageFolderButton {
+  width: 100%;
+  min-height: 38px;
+  justify-content: center;
+}
+
 .xhsPostBody {
   display: grid;
   align-content: start;
