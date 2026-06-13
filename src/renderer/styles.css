@@ -706,7 +706,7 @@ nav {
   width: 100%;
   display: grid;
   grid-template-columns: 42px minmax(0, 1fr) auto;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
   text-align: left;
 }
@@ -749,13 +749,36 @@ nav {
 
 .socialAccountActions {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  align-items: center;
+  gap: 5px;
 }
 
-.socialAccountActions button {
-  min-width: 58px;
-  padding: 7px 10px;
+.accountActionButton {
+  min-width: auto;
+  min-height: 28px;
+  padding: 0 9px;
+  border-radius: 999px;
+  border: 1px solid #cad6e3;
+  background: #ffffff;
+  color: #43556b;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.accountActionButton.bind {
+  border-color: #b9d7d3;
+  color: #2b7a78;
+  background: #f3fbfa;
+}
+
+.accountActionButton.delete {
+  border-color: #f0c8c8;
+  color: #b23333;
+  background: #fff8f8;
+}
+
+.accountActionButton:hover {
+  filter: brightness(0.98);
 }
 
 .accountProfileFields {

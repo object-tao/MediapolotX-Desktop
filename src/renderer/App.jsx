@@ -4216,11 +4216,11 @@ function SocialAccountList({ accounts, platforms, proxies, selectedId, onSelect,
               </span>
               <span className="socialAccountActions" onClick={(event) => event.stopPropagation()}>
                 {isSocialAccountBound(account) ? (
-                  <button type="button" className="secondaryButton" onClick={() => onUnbind(account)}>解绑</button>
+                  <button type="button" className="accountActionButton" onClick={() => onUnbind(account)}>解绑</button>
                 ) : (
-                  <button type="button" onClick={() => onBind(account)}>绑定</button>
+                  <button type="button" className="accountActionButton bind" onClick={() => onBind(account)}>绑定</button>
                 )}
-                <button type="button" className="dangerButton" onClick={() => onDelete(account.id)}>删除</button>
+                <button type="button" className="accountActionButton delete" onClick={() => onDelete(account.id)}>删除</button>
               </span>
             </div>
           ))}
