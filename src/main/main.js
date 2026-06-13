@@ -16,6 +16,7 @@ const localWorkImporter = require('../modules/localWorkImporter');
 const localWorkCopywriter = require('../modules/localWorkCopywriter');
 const localWorkSpeechwriter = require('../modules/localWorkSpeechwriter');
 const localWorkPodcastWriter = require('../modules/localWorkPodcastWriter');
+const { createKnowledgeBaseManager } = require('../modules/knowledgeBaseManager');
 const { createAiConfigManager } = require('../modules/aiConfigManager');
 const { createSocialAccountManager } = require('../modules/socialAccountManager');
 const { createProxyManager } = require('../modules/proxyManager');
@@ -30,6 +31,7 @@ let settingsManager;
 let aiConfigManager;
 let socialAccountManager;
 let proxyManager;
+let knowledgeBaseManager;
 let logger;
 const watchers = new Map();
 const socialBrowserViews = new Map();
@@ -76,6 +78,8 @@ async function bootstrapServices() {
   aiConfigManager = createAiConfigManager(settingsManager, safeStorage);
   socialAccountManager = createSocialAccountManager(settingsManager);
   proxyManager = createProxyManager(settingsManager);
+  knowledgeBaseManager = createKnowledgeBaseManager(db, path.join(userData, 'knowledge-base'));
+  await knowledgeBaseManager.ensureSeedData();
 }
 
 function registerIpc() {
@@ -335,6 +339,22 @@ function registerIpc() {
 
   ipcMain.handle('content:rewriteArticle', async (_event, payload) => (
     articleRewriter.rewriteArticle(payload, (options) => aiConfigManager.completeText(options))
+  ));
+
+  ipcMain.handle('knowledge:list', async (_event, payload = {}) => (
+    knowledgeBaseManager.listNodes(payload.industry || 'all')
+  ));
+
+  ipcMain.handle('knowledge:read', async (_event, nodeId) => (
+    knowledgeBaseManager.readNode(nodeId)
+  ));
+
+  ipcMain.handle('knowledge:save', async (_event, payload) => (
+    knowledgeBaseManager.saveNode(payload)
+  ));
+
+  ipcMain.handle('knowledge:delete', async (_event, payload) => (
+    knowledgeBaseManager.deleteNode(payload.nodeId, payload.filterIndustry || 'all')
   ));
 
   ipcMain.handle('social:platforms', () => socialAccountManager.platforms());

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Bot,
+  BookOpen,
   Clapperboard,
   Copy,
   FileText,
@@ -98,6 +99,7 @@ const groupedNavItems = [
     shortTitle: '材',
     items: [
       { view: 'library', label: '素材库', shortLabel: '素', icon: 'L' },
+      { view: 'knowledgeBase', label: '知识库', shortLabel: '知', icon: 'K' },
       { view: 'image', label: '图片处理', shortLabel: '图', icon: 'I' },
       { view: 'video', label: '视频封面', shortLabel: '视', icon: 'V' },
       { view: 'sync', label: '任务同步', shortLabel: '同', icon: 'S' }
@@ -163,6 +165,7 @@ async function copyTextToClipboard(text) {
 
 const navIconByView = {
   library: Library,
+  knowledgeBase: BookOpen,
   image: ImageIcon,
   video: Clapperboard,
   sync: RefreshCw,
@@ -328,6 +331,12 @@ function App() {
   const [promptFilters, setPromptFilters] = useState({ category: 'all', tag: 'all' });
   const [promptPage, setPromptPage] = useState(1);
   const [selectedPrompt, setSelectedPrompt] = useState(null);
+  const [knowledgeIndustries, setKnowledgeIndustries] = useState([]);
+  const [knowledgeIndustryFilter, setKnowledgeIndustryFilter] = useState('all');
+  const [knowledgeNodes, setKnowledgeNodes] = useState([]);
+  const [selectedKnowledgeId, setSelectedKnowledgeId] = useState('');
+  const [knowledgeExpandedIds, setKnowledgeExpandedIds] = useState([]);
+  const [knowledgeEditor, setKnowledgeEditor] = useState(null);
   const [localWorksPath, setLocalWorksPath] = useState(() => localStorage.getItem('mediapolotx.localWorksPath') || '');
   const [localWorksList, setLocalWorksList] = useState([]);
   const [localWorksImportPath, setLocalWorksImportPath] = useState('');
@@ -405,6 +414,10 @@ function App() {
   const aiTextModels = useMemo(() => (
     aiStore.models.filter((model) => model.enabled !== false && ['text', 'both'].includes(model.type))
   ), [aiStore.models]);
+  const selectedKnowledgeNode = useMemo(
+    () => knowledgeNodes.find((node) => node.id === selectedKnowledgeId) || knowledgeNodes[0] || null,
+    [knowledgeNodes, selectedKnowledgeId]
+  );
 
   useEffect(() => {
     if (localWorkTagFilter !== 'all' && !localWorkTags.includes(localWorkTagFilter)) {
@@ -490,6 +503,18 @@ function App() {
     setLocalWorksMode('imported');
   }, [localWorksPath]);
 
+  const loadKnowledgeBase = useCallback(async (industry = 'all') => {
+    const result = await window.mediapolotx.knowledge.list({ industry });
+    setKnowledgeIndustries(result.industries || []);
+    setKnowledgeNodes(result.nodes || []);
+    setKnowledgeExpandedIds((result.nodes || []).map((node) => node.id));
+    setSelectedKnowledgeId((current) => (
+      current && (result.nodes || []).some((node) => node.id === current)
+        ? current
+        : result.nodes?.[0]?.id || ''
+    ));
+  }, []);
+
   const getSocialBrowserBounds = useCallback(() => {
     const rect = socialBrowserRef.current?.getBoundingClientRect();
     if (!rect) return null;
@@ -520,6 +545,7 @@ function App() {
     refreshSocialAccounts();
     refreshNetworkProxies();
     loadImportedLocalWorks();
+    loadKnowledgeBase();
 
     const off = window.mediapolotx.scanner.onEvent((event) => {
       setMessage(`监听事件：${event.type}`);
@@ -538,7 +564,7 @@ function App() {
       offAiProgress();
       offDuplicateProgress();
     };
-  }, [loadAiStore, loadFiles, loadImportedLocalWorks, refreshNetworkProxies, refreshSocialAccounts, refreshStorages, refreshTasks, selectedStorageId]);
+  }, [loadAiStore, loadFiles, loadImportedLocalWorks, loadKnowledgeBase, refreshNetworkProxies, refreshSocialAccounts, refreshStorages, refreshTasks, selectedStorageId]);
 
   useEffect(() => {
     if (!['socialAccounts', 'socialWorks', 'oneClickPublish'].includes(activeView)) {
@@ -1172,6 +1198,10 @@ function App() {
         if (selectedStorageId) await loadFiles(selectedStorageId);
         return;
       }
+      if (view === 'knowledgeBase') {
+        await loadKnowledgeBase(knowledgeIndustryFilter);
+        return;
+      }
       if (['image', 'video'].includes(view)) {
         if (selectedStorageId) await loadFiles(selectedStorageId);
         return;
@@ -1319,6 +1349,72 @@ function App() {
     setLocalWorkTagFilter((current) => (current !== 'all' && !tags.includes(current) ? 'all' : current));
     setLocalWorkTagEditor(null);
     setMessage('标签已保存');
+  }
+
+  async function changeKnowledgeIndustry(nextIndustry) {
+    setKnowledgeIndustryFilter(nextIndustry);
+    await loadKnowledgeBase(nextIndustry);
+  }
+
+  function openKnowledgeEditor(node = null, parentId = '') {
+    const parent = knowledgeNodes.find((item) => item.id === parentId);
+    setKnowledgeEditor({
+      id: node?.id || '',
+      parentId: node?.parentId || parentId || '',
+      title: node?.title || '',
+      industry: node?.industry || parent?.industry || (knowledgeIndustryFilter !== 'all' ? knowledgeIndustryFilter : knowledgeIndustries[0] || '外贸行业'),
+      contentMarkdown: node?.contentMarkdown || '',
+      sortOrder: node?.sortOrder || 0
+    });
+  }
+
+  async function saveKnowledgeNode() {
+    if (!knowledgeEditor) return;
+    try {
+      setBusy(true);
+      const result = await window.mediapolotx.knowledge.save({
+        ...knowledgeEditor,
+        filterIndustry: knowledgeIndustryFilter
+      });
+      setKnowledgeNodes(result.nodes || []);
+      setKnowledgeExpandedIds((result.nodes || []).map((node) => node.id));
+      setSelectedKnowledgeId(knowledgeEditor.id || result.nodes?.find((node) => node.title === knowledgeEditor.title)?.id || '');
+      setKnowledgeEditor(null);
+      setMessage('知识库内容已保存');
+    } catch (error) {
+      setMessage(`保存知识库失败：${cleanRemoteError(error)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteKnowledgeNode(node) {
+    if (!node) return;
+    const confirmed = window.confirm(`确定删除“${node.title}”及其所有子节点吗？对应 Markdown 文件也会删除。`);
+    if (!confirmed) return;
+    try {
+      setBusy(true);
+      const result = await window.mediapolotx.knowledge.delete({
+        nodeId: node.id,
+        filterIndustry: knowledgeIndustryFilter
+      });
+      setKnowledgeNodes(result.nodes || []);
+      setKnowledgeExpandedIds((result.nodes || []).map((item) => item.id));
+      setSelectedKnowledgeId(result.nodes?.[0]?.id || '');
+      setMessage('知识库节点已删除');
+    } catch (error) {
+      setMessage(`删除知识库失败：${cleanRemoteError(error)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function toggleKnowledgeNode(nodeId) {
+    setKnowledgeExpandedIds((current) => (
+      current.includes(nodeId)
+        ? current.filter((id) => id !== nodeId)
+        : [...current, nodeId]
+    ));
   }
 
   async function deleteLocalWork(work) {
@@ -1800,6 +1896,24 @@ function App() {
               onCheck={checkOnline}
             />
           </section>
+        )}
+
+        {activeView === 'knowledgeBase' && (
+          <KnowledgeBaseView
+            industries={knowledgeIndustries}
+            industryFilter={knowledgeIndustryFilter}
+            nodes={knowledgeNodes}
+            selectedNode={selectedKnowledgeNode}
+            expandedIds={knowledgeExpandedIds}
+            busy={busy}
+            onIndustryChange={changeKnowledgeIndustry}
+            onSelect={setSelectedKnowledgeId}
+            onToggle={toggleKnowledgeNode}
+            onAddRoot={() => openKnowledgeEditor()}
+            onAddChild={(node) => openKnowledgeEditor(null, node.id)}
+            onEdit={openKnowledgeEditor}
+            onDelete={deleteKnowledgeNode}
+          />
         )}
 
         {activeView === 'image' && (
@@ -2577,7 +2691,7 @@ function App() {
           />
         )}
 
-        {!['socialAccounts', 'socialWorks', 'localWorks', 'oneClickPublish', 'proxyConfig', 'aiParamLibrary'].includes(activeView) && (
+        {!['socialAccounts', 'socialWorks', 'localWorks', 'oneClickPublish', 'proxyConfig', 'aiParamLibrary', 'knowledgeBase'].includes(activeView) && (
           <FileTable
             files={files}
             selectedFileIds={selectedFileIds}
@@ -2588,7 +2702,7 @@ function App() {
           />
         )}
 
-        {!['sync', 'socialAccounts', 'socialWorks', 'localWorks', 'oneClickPublish', 'proxyConfig', 'aiParamLibrary'].includes(activeView) && <TaskList tasks={tasks} compact onOpenPath={openPath} />}
+        {!['sync', 'socialAccounts', 'socialWorks', 'localWorks', 'oneClickPublish', 'proxyConfig', 'aiParamLibrary', 'knowledgeBase'].includes(activeView) && <TaskList tasks={tasks} compact onOpenPath={openPath} />}
         {addAccountModal.open && (
           <AddMediaAccountModal
             modal={addAccountModal}
@@ -2648,6 +2762,17 @@ function App() {
             onChange={setPublishRecordEditor}
             onSaveRecord={savePublishRecord}
             onClose={() => setPublishRecordEditor(null)}
+          />
+        )}
+        {knowledgeEditor && (
+          <KnowledgeEditorModal
+            editor={knowledgeEditor}
+            nodes={knowledgeNodes}
+            industries={knowledgeIndustries}
+            busy={busy}
+            onChange={setKnowledgeEditor}
+            onSave={saveKnowledgeNode}
+            onClose={() => setKnowledgeEditor(null)}
           />
         )}
         {copywriterModal && (
@@ -2812,6 +2937,187 @@ function PromptLibraryView({
       </div>
     </section>
   );
+}
+
+function KnowledgeBaseView({
+  industries,
+  industryFilter,
+  nodes,
+  selectedNode,
+  expandedIds,
+  busy,
+  onIndustryChange,
+  onSelect,
+  onToggle,
+  onAddRoot,
+  onAddChild,
+  onEdit,
+  onDelete
+}) {
+  const tree = buildKnowledgeTree(nodes);
+  return (
+    <section className="knowledgeLayout">
+      <div className="panel knowledgeToolbar">
+        <div>
+          <h2>知识库</h2>
+          <span>按行业筛选并维护 Markdown 知识内容，左侧支持无限级目录。</span>
+        </div>
+        <div className="tableActions">
+          <select value={industryFilter} onChange={(event) => onIndustryChange(event.target.value)} disabled={busy}>
+            <option value="all">全部行业</option>
+            {industries.map((industry) => (
+              <option value={industry} key={industry}>{industry}</option>
+            ))}
+          </select>
+          <button type="button" onClick={onAddRoot} disabled={busy}>新增根节点</button>
+        </div>
+      </div>
+      <div className="knowledgeBody">
+        <aside className="panel knowledgeTreePanel">
+          {tree.length > 0 ? (
+            <KnowledgeTree
+              nodes={tree}
+              selectedId={selectedNode?.id || ''}
+              expandedIds={expandedIds}
+              onSelect={onSelect}
+              onToggle={onToggle}
+            />
+          ) : (
+            <div className="empty">当前行业暂无知识节点</div>
+          )}
+        </aside>
+        <article className="panel knowledgeContentPanel">
+          {selectedNode ? (
+            <>
+              <div className="knowledgeContentHeader">
+                <div>
+                  <h2>{selectedNode.title}</h2>
+                  <span>{selectedNode.industry} · {selectedNode.filePath || '未绑定文件'}</span>
+                </div>
+                <div className="tableActions">
+                  <button type="button" onClick={() => onAddChild(selectedNode)} disabled={busy}>新增子节点</button>
+                  <button type="button" onClick={() => onEdit(selectedNode)} disabled={busy}>编辑</button>
+                  <button type="button" className="dangerButton" onClick={() => onDelete(selectedNode)} disabled={busy}>删除</button>
+                </div>
+              </div>
+              <div className="knowledgeRichText" dangerouslySetInnerHTML={{ __html: selectedNode.contentHtml || '<p>暂无内容</p>' }} />
+            </>
+          ) : (
+            <div className="empty">请选择左侧知识节点</div>
+          )}
+        </article>
+      </div>
+    </section>
+  );
+}
+
+function KnowledgeTree({ nodes, selectedId, expandedIds, onSelect, onToggle, depth = 0 }) {
+  return (
+    <div className="knowledgeTree">
+      {nodes.map((node) => {
+        const expanded = expandedIds.includes(node.id);
+        const hasChildren = node.children.length > 0;
+        return (
+          <div className="knowledgeTreeItem" key={node.id}>
+            <div className={`knowledgeTreeNode ${selectedId === node.id ? 'active' : ''}`} style={{ paddingLeft: `${depth * 16 + 8}px` }}>
+              <button type="button" className="treeToggle" onClick={() => hasChildren && onToggle(node.id)} disabled={!hasChildren}>
+                {hasChildren ? (expanded ? '▾' : '▸') : '·'}
+              </button>
+              <button type="button" className="treeTitle" onClick={() => onSelect(node.id)} title={node.title}>
+                {node.title}
+              </button>
+            </div>
+            {hasChildren && expanded && (
+              <KnowledgeTree
+                nodes={node.children}
+                selectedId={selectedId}
+                expandedIds={expandedIds}
+                onSelect={onSelect}
+                onToggle={onToggle}
+                depth={depth + 1}
+              />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function KnowledgeEditorModal({ editor, nodes, industries, busy, onChange, onSave, onClose }) {
+  const parentOptions = nodes.filter((node) => node.id !== editor.id);
+  return (
+    <div className="modalBackdrop">
+      <div className="mediaAccountModal workPathModal knowledgeEditorModal">
+        <div className="modalHeader">
+          <div>
+            <h2>{editor.id ? '编辑知识节点' : '新增知识节点'}</h2>
+            <p>内容会保存为 Markdown 文件，数据库只保存目录和文件路径。</p>
+          </div>
+          <button className="iconButton" onClick={onClose} disabled={busy}>×</button>
+        </div>
+        <div className="modalSection">
+          <div className="splitInputs">
+            <label>
+              标题
+              <input value={editor.title} onChange={(event) => onChange({ ...editor, title: event.target.value })} disabled={busy} />
+            </label>
+            <label>
+              行业
+              <select value={editor.industry} onChange={(event) => onChange({ ...editor, industry: event.target.value })} disabled={busy}>
+                {industries.map((industry) => (
+                  <option value={industry} key={industry}>{industry}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className="splitInputs">
+            <label>
+              父级节点
+              <select value={editor.parentId || ''} onChange={(event) => onChange({ ...editor, parentId: event.target.value })} disabled={busy}>
+                <option value="">根节点</option>
+                {parentOptions.map((node) => (
+                  <option value={node.id} key={node.id}>{node.title}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              排序
+              <input type="number" value={editor.sortOrder} onChange={(event) => onChange({ ...editor, sortOrder: event.target.value })} disabled={busy} />
+            </label>
+          </div>
+          <label>
+            Markdown 内容
+            <textarea
+              className="largeTextarea copyPromptTextarea"
+              value={editor.contentMarkdown}
+              onChange={(event) => onChange({ ...editor, contentMarkdown: event.target.value })}
+              disabled={busy}
+            />
+          </label>
+        </div>
+        <div className="modalActions">
+          <button type="button" className="secondaryButton" onClick={onClose} disabled={busy}>取消</button>
+          <button type="button" onClick={onSave} disabled={busy || !editor.title}>保存</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function buildKnowledgeTree(nodes) {
+  const map = new Map(nodes.map((node) => [node.id, { ...node, children: [] }]));
+  const roots = [];
+  for (const node of map.values()) {
+    if (node.parentId && map.has(node.parentId)) map.get(node.parentId).children.push(node);
+    else roots.push(node);
+  }
+  const sortNodes = (items) => {
+    items.sort((a, b) => (a.sortOrder - b.sortOrder) || a.title.localeCompare(b.title, 'zh-Hans-CN'));
+    items.forEach((item) => sortNodes(item.children));
+  };
+  sortNodes(roots);
+  return roots;
 }
 
 function LocalWorksView({
@@ -3942,6 +4248,7 @@ function ProgressBar({ progress, label, detail }) {
 
 function viewTitle(activeView) {
   if (activeView === 'image') return '图片批量处理';
+  if (activeView === 'knowledgeBase') return '知识库';
   if (activeView === 'video') return '视频封面处理';
   if (activeView === 'sync') return 'Web 协同';
   if (activeView === 'socialAccounts') return '账号管理';
@@ -3960,6 +4267,7 @@ function viewTitle(activeView) {
 
 function viewSubtitle(activeView) {
   if (activeView === 'image') return '对选中的图片执行尺寸调整、压缩、EXIF 清理和模板渲染。';
+  if (activeView === 'knowledgeBase') return '按行业沉淀外贸、集运、物流和清关知识，内容以 Markdown 文件保存。';
   if (activeView === 'video') return '从选中的视频中截取封面，并生成横竖屏适配结果。';
   if (activeView === 'sync') return '连接 MediapolotX Web，获取任务队列并回传处理状态。';
   if (activeView === 'socialAccounts') return '管理公众号和小红书账号，使用独立 Cookie/session 打开真实平台后台。';

@@ -1,0 +1,244 @@
+const fs = require('node:fs/promises');
+const path = require('node:path');
+const { randomUUID } = require('node:crypto');
+const { nowIso } = require('./db');
+
+const industries = ['外贸行业', '集运行业', '国际物流', '国际清关'];
+
+function createKnowledgeBaseManager(db, baseDir) {
+  async function listNodes(industry = 'all') {
+    await ensureBaseDir();
+    const rows = industry && industry !== 'all'
+      ? db.prepare(`
+        SELECT * FROM knowledge_base_nodes
+        WHERE industry = @industry
+        ORDER BY sort_order ASC, created_at ASC, title ASC
+      `).all({ industry })
+      : db.prepare(`
+        SELECT * FROM knowledge_base_nodes
+        ORDER BY sort_order ASC, created_at ASC, title ASC
+      `).all();
+    const nodes = [];
+    for (const row of rows) {
+      nodes.push(await rowToUi(row));
+    }
+    return {
+      industries,
+      nodes
+    };
+  }
+
+  async function readNode(nodeId) {
+    const row = db.prepare('SELECT * FROM knowledge_base_nodes WHERE id = @nodeId').get({ nodeId });
+    if (!row) throw new Error('知识库节点不存在');
+    return rowToUi(row);
+  }
+
+  async function saveNode(payload = {}) {
+    await ensureBaseDir();
+    const id = payload.id || `kb-${randomUUID()}`;
+    const now = nowIso();
+    const existing = payload.id
+      ? db.prepare('SELECT * FROM knowledge_base_nodes WHERE id = @id').get({ id: payload.id })
+      : null;
+    if (payload.parentId && payload.parentId === id) throw new Error('父级节点不能选择自己');
+    if (payload.parentId && payload.id) {
+      const rows = db.prepare('SELECT id, parent_id FROM knowledge_base_nodes').all();
+      if (collectDescendantIds(rows, id).includes(payload.parentId)) {
+        throw new Error('父级节点不能选择当前节点的子节点');
+      }
+    }
+    if (payload.parentId) {
+      const parent = db.prepare('SELECT id FROM knowledge_base_nodes WHERE id = @parentId').get({ parentId: payload.parentId });
+      if (!parent) throw new Error('父级节点不存在');
+    }
+
+    const title = normalizeTitle(payload.title);
+    const industry = normalizeIndustry(payload.industry);
+    const filePath = existing?.file_path || path.join(baseDir, `${id}.md`);
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
+    await fs.writeFile(filePath, String(payload.contentMarkdown || ''), 'utf8');
+
+    db.prepare(`
+      INSERT INTO knowledge_base_nodes (
+        id, parent_id, title, industry, node_type, file_path, sort_order, created_at, updated_at
+      ) VALUES (
+        @id, @parentId, @title, @industry, @nodeType, @filePath, @sortOrder, @createdAt, @updatedAt
+      )
+      ON CONFLICT(id) DO UPDATE SET
+        parent_id = excluded.parent_id,
+        title = excluded.title,
+        industry = excluded.industry,
+        node_type = excluded.node_type,
+        file_path = excluded.file_path,
+        sort_order = excluded.sort_order,
+        updated_at = excluded.updated_at
+    `).run({
+      id,
+      parentId: payload.parentId || '',
+      title,
+      industry,
+      nodeType: payload.nodeType || 'content',
+      filePath,
+      sortOrder: Number(payload.sortOrder || existing?.sort_order || 0),
+      createdAt: existing?.created_at || now,
+      updatedAt: now
+    });
+    return listNodes(payload.filterIndustry || 'all');
+  }
+
+  async function deleteNode(nodeId, filterIndustry = 'all') {
+    const rows = db.prepare('SELECT * FROM knowledge_base_nodes').all();
+    const deleteIds = collectDescendantIds(rows, nodeId);
+    for (const id of deleteIds) {
+      const row = rows.find((item) => item.id === id);
+      if (row?.file_path) {
+        await fs.rm(row.file_path, { force: true });
+      }
+      db.prepare('DELETE FROM knowledge_base_nodes WHERE id = @id').run({ id });
+    }
+    return listNodes(filterIndustry);
+  }
+
+  async function ensureSeedData() {
+    const count = db.prepare('SELECT COUNT(*) AS count FROM knowledge_base_nodes').get()?.count || 0;
+    if (Number(count) > 0) return listNodes('all');
+    await saveNode({
+      title: '外贸术语基础',
+      industry: '外贸行业',
+      contentMarkdown: '# 外贸术语基础\n\n这里可以维护常用外贸术语、业务流程和写作素材。\n\n- FOB / CIF / CFR\n- 报关资料\n- 交付与结算节点'
+    });
+    await saveNode({
+      title: '国际清关要点',
+      industry: '国际清关',
+      contentMarkdown: '# 国际清关要点\n\n用于沉淀清关流程、申报规范、风险提醒和案例素材。'
+    });
+    return listNodes('all');
+  }
+
+  async function rowToUi(row) {
+    const contentMarkdown = row.file_path ? await safeReadFile(row.file_path) : '';
+    return {
+      id: row.id,
+      parentId: row.parent_id || '',
+      title: row.title,
+      industry: row.industry,
+      nodeType: row.node_type || 'content',
+      filePath: row.file_path || '',
+      sortOrder: Number(row.sort_order || 0),
+      contentMarkdown,
+      contentHtml: markdownToHtml(contentMarkdown),
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    };
+  }
+
+  async function ensureBaseDir() {
+    await fs.mkdir(baseDir, { recursive: true });
+  }
+
+  return {
+    industries: () => industries,
+    listNodes,
+    readNode,
+    saveNode,
+    deleteNode,
+    ensureSeedData
+  };
+}
+
+function collectDescendantIds(rows, rootId) {
+  const ids = new Set([rootId]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const row of rows) {
+      if (ids.has(row.parent_id) && !ids.has(row.id)) {
+        ids.add(row.id);
+        changed = true;
+      }
+    }
+  }
+  return [...ids];
+}
+
+async function safeReadFile(filePath) {
+  try {
+    return await fs.readFile(filePath, 'utf8');
+  } catch {
+    return '';
+  }
+}
+
+function normalizeTitle(value) {
+  const title = String(value || '').trim();
+  if (!title) throw new Error('知识库标题不能为空');
+  return title.slice(0, 120);
+}
+
+function normalizeIndustry(value) {
+  return industries.includes(value) ? value : industries[0];
+}
+
+function markdownToHtml(markdown) {
+  const lines = String(markdown || '').split(/\r?\n/);
+  const html = [];
+  let listOpen = false;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      if (listOpen) {
+        html.push('</ul>');
+        listOpen = false;
+      }
+      continue;
+    }
+    const heading = trimmed.match(/^(#{1,6})\s+(.+)$/);
+    if (heading) {
+      if (listOpen) {
+        html.push('</ul>');
+        listOpen = false;
+      }
+      html.push(`<h${heading[1].length}>${inlineMarkdown(heading[2])}</h${heading[1].length}>`);
+      continue;
+    }
+    const bullet = trimmed.match(/^[-*]\s+(.+)$/);
+    if (bullet) {
+      if (!listOpen) {
+        html.push('<ul>');
+        listOpen = true;
+      }
+      html.push(`<li>${inlineMarkdown(bullet[1])}</li>`);
+      continue;
+    }
+    if (listOpen) {
+      html.push('</ul>');
+      listOpen = false;
+    }
+    html.push(`<p>${inlineMarkdown(trimmed)}</p>`);
+  }
+  if (listOpen) html.push('</ul>');
+  return html.join('\n');
+}
+
+function inlineMarkdown(value) {
+  return escapeHtml(value)
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+    .replace(/\[([^\]]+)]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>');
+}
+
+function escapeHtml(value) {
+  return String(value || '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
+module.exports = {
+  createKnowledgeBaseManager,
+  markdownToHtml,
+  industries
+};

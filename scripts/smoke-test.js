@@ -17,6 +17,7 @@ const localWorkSpeechwriter = require('../src/modules/localWorkSpeechwriter');
 const localWorkPodcastWriter = require('../src/modules/localWorkPodcastWriter');
 const { createAiConfigManager } = require('../src/modules/aiConfigManager');
 const { createSocialAccountManager } = require('../src/modules/socialAccountManager');
+const { createKnowledgeBaseManager } = require('../src/modules/knowledgeBaseManager');
 
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mediapolotx-smoke-'));
 const dbPath = path.join(tempRoot, 'smoke.sqlite');
@@ -28,6 +29,7 @@ try {
   const fileScanner = createFileScanner(db);
   const settingsManager = createSettingsManager(db);
   const taskManager = createTaskManager(db);
+  const knowledgeBaseManager = createKnowledgeBaseManager(db, path.join(tempRoot, 'knowledge-base'));
   const storage = storageManager.addStorage('Smoke Library', 'local', tempRoot);
   const list = storageManager.getStorageList();
 
@@ -196,6 +198,40 @@ try {
   }
   if (!aiConfigManager.getProviders().some((provider) => provider.value === 'openai')) {
     throw new Error('AI providers smoke test failed.');
+  }
+
+  await knowledgeBaseManager.ensureSeedData();
+  const knowledgeRoot = await knowledgeBaseManager.saveNode({
+    title: 'Smoke Root',
+    industry: '外贸行业',
+    contentMarkdown: '# Smoke Root\n\n**重点**内容'
+  });
+  const rootNode = knowledgeRoot.nodes.find((node) => node.title === 'Smoke Root');
+  if (!rootNode) {
+    throw new Error('Knowledge base root save smoke test failed.');
+  }
+  await knowledgeBaseManager.saveNode({
+    parentId: rootNode.id,
+    title: 'Smoke Child',
+    industry: '外贸行业',
+    contentMarkdown: '- 子节点内容'
+  });
+  const knowledgeList = await knowledgeBaseManager.listNodes('外贸行业');
+  const knowledgeChild = knowledgeList.nodes.find((node) => node.title === 'Smoke Child');
+  if (
+    !knowledgeChild
+    || knowledgeChild.parentId !== rootNode.id
+    || !rootNode.contentHtml.includes('<strong>重点</strong>')
+    || !fs.existsSync(rootNode.filePath)
+  ) {
+    throw new Error('Knowledge base save/list smoke test failed.');
+  }
+  const afterDeleteKnowledge = await knowledgeBaseManager.deleteNode(rootNode.id, '外贸行业');
+  if (
+    afterDeleteKnowledge.nodes.some((node) => node.id === rootNode.id || node.id === knowledgeChild.id)
+    || fs.existsSync(rootNode.filePath)
+  ) {
+    throw new Error('Knowledge base recursive delete smoke test failed.');
   }
 
   const qwenWithStaleResource = aiConfigManager.saveModel({

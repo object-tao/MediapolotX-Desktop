@@ -125,6 +125,18 @@ function migrate(db) {
       updated_at TEXT NOT NULL,
       UNIQUE(target_type, target_id, platform)
     );
+
+    CREATE TABLE IF NOT EXISTS knowledge_base_nodes (
+      id TEXT PRIMARY KEY,
+      parent_id TEXT,
+      title TEXT NOT NULL,
+      industry TEXT NOT NULL,
+      node_type TEXT NOT NULL DEFAULT 'content',
+      file_path TEXT,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
   `);
 
   addColumnIfMissing(db, 'tasks', 'result', 'TEXT');

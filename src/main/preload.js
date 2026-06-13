@@ -51,6 +51,12 @@ contextBridge.exposeInMainWorld('mediapolotx', {
     readMarkdownFile: (filePath) => ipcRenderer.invoke('content:readMarkdownFile', filePath),
     rewriteArticle: (payload) => ipcRenderer.invoke('content:rewriteArticle', payload)
   },
+  knowledge: {
+    list: (payload) => ipcRenderer.invoke('knowledge:list', payload),
+    read: (nodeId) => ipcRenderer.invoke('knowledge:read', nodeId),
+    save: (payload) => ipcRenderer.invoke('knowledge:save', payload),
+    delete: (payload) => ipcRenderer.invoke('knowledge:delete', payload)
+  },
   localWorks: {
     scanImportDirectory: (rootPath) => ipcRenderer.invoke('localWorks:scanImportDirectory', rootPath),
     importScannedWorks: (payload) => ipcRenderer.invoke('localWorks:importScannedWorks', payload),
