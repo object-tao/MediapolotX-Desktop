@@ -342,6 +342,7 @@ function App() {
   const [localWorksImportPath, setLocalWorksImportPath] = useState('');
   const [localWorksMode, setLocalWorksMode] = useState('imported');
   const [localWorkTagFilter, setLocalWorkTagFilter] = useState('all');
+  const [localWorkSearchQuery, setLocalWorkSearchQuery] = useState('');
   const [localWorkPage, setLocalWorkPage] = useState(1);
   const [localWorkTagEditor, setLocalWorkTagEditor] = useState(null);
   const [workPathModalOpen, setWorkPathModalOpen] = useState(false);
@@ -399,11 +400,14 @@ function App() {
     () => Array.from(new Set(localWorksList.flatMap((work) => work.tags || []))).sort((a, b) => a.localeCompare(b, 'zh-Hans-CN')),
     [localWorksList]
   );
-  const filteredLocalWorks = useMemo(() => (
-    localWorkTagFilter === 'all'
-      ? localWorksList
-      : localWorksList.filter((work) => (work.tags || []).includes(localWorkTagFilter))
-  ), [localWorkTagFilter, localWorksList]);
+  const filteredLocalWorks = useMemo(() => {
+    const keyword = localWorkSearchQuery.trim().toLowerCase();
+    return localWorksList.filter((work) => {
+      const tagMatched = localWorkTagFilter === 'all' || (work.tags || []).includes(localWorkTagFilter);
+      const nameMatched = !keyword || String(work.title || work.folderName || '').toLowerCase().includes(keyword);
+      return tagMatched && nameMatched;
+    });
+  }, [localWorkSearchQuery, localWorkTagFilter, localWorksList]);
   const localWorkPageSize = 20;
   const localWorkPageCount = Math.max(1, Math.ceil(filteredLocalWorks.length / localWorkPageSize));
   const pagedLocalWorks = useMemo(() => {
@@ -2138,12 +2142,17 @@ function App() {
             mode={localWorksMode}
             tagOptions={localWorkTags}
             tagFilter={localWorkTagFilter}
+            searchQuery={localWorkSearchQuery}
             totalCount={filteredLocalWorks.length}
             page={Math.min(localWorkPage, localWorkPageCount)}
             pageCount={localWorkPageCount}
             pageSize={localWorkPageSize}
             onTagFilterChange={(nextTag) => {
               setLocalWorkTagFilter(nextTag);
+              setLocalWorkPage(1);
+            }}
+            onSearchQueryChange={(nextQuery) => {
+              setLocalWorkSearchQuery(nextQuery);
               setLocalWorkPage(1);
             }}
             onPageChange={setLocalWorkPage}
@@ -3134,11 +3143,13 @@ function LocalWorksView({
   mode,
   tagOptions,
   tagFilter,
+  searchQuery,
   totalCount,
   page,
   pageCount,
   pageSize,
   onTagFilterChange,
+  onSearchQueryChange,
   onPageChange,
   onEditTags,
   onDeleteWork,
@@ -3164,8 +3175,20 @@ function LocalWorksView({
           <h2>本地作品列表</h2>
           <span>作品存放路径：{worksPath || '尚未设置'}{importPath ? `；当前导入来源：${importPath}` : ''}</span>
         </div>
-        <div className="tableActions">
+        <div className="tableActions localWorksFilters">
           <span>{totalCount} 条，每页 {pageSize} 条</span>
+          <input
+            className="localWorkSearchInput"
+            value={searchQuery}
+            onChange={(event) => onSearchQueryChange(event.target.value)}
+            placeholder="按标题搜索"
+            disabled={busy}
+          />
+          {searchQuery && (
+            <button type="button" className="secondaryButton" onClick={() => onSearchQueryChange('')} disabled={busy}>
+              清空
+            </button>
+          )}
           <select value={tagFilter} onChange={(event) => onTagFilterChange(event.target.value)} disabled={busy}>
             <option value="all">全部标签</option>
             {tagOptions.map((tag) => (

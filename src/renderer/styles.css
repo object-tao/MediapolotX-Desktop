@@ -1080,6 +1080,16 @@ textarea {
   white-space: nowrap;
 }
 
+.localWorksFilters {
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.localWorkSearchInput {
+  width: 220px;
+  min-height: 36px;
+}
+
 .localWorkTable {
   display: grid;
   overflow: hidden;
