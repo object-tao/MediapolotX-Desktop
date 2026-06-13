@@ -3861,7 +3861,7 @@ function LocalWorkChildrenModal({ work, selectedChild, onSelectChild, onEditPubl
               <span>平台发布：{publishSummaryText(selectedChild.publishRecords)}</span>
               <button type="button" onClick={() => onEditPublishRecords(selectedChild)}>编辑平台状态</button>
             </div>
-            <LocalWorkPostPreview item={selectedChild} onOpenPath={onOpenPath} />
+            <LocalWorkPostPreview item={selectedChild} onOpenPath={onOpenPath} showImageFolderButton={false} />
           </>
         ) : (
           <div className="localChildMasonry">
@@ -3891,6 +3891,11 @@ function LocalWorkChildrenModal({ work, selectedChild, onSelectChild, onEditPubl
         )}
         <div className="modalActions">
           {selectedChild && <button type="button" className="secondaryButton" onClick={onBack}>返回子作品</button>}
+          {selectedChild && (
+            <button type="button" className="secondaryButton" onClick={() => onOpenPath?.(selectedChild.folderPath)} disabled={!selectedChild.folderPath}>
+              打开文件目录
+            </button>
+          )}
           <button type="button" onClick={onClose}>关闭</button>
         </div>
       </div>
@@ -3949,7 +3954,7 @@ function LocalWorkTagModal({ editor, onChange, onSave, onClose }) {
   );
 }
 
-function LocalWorkPostPreview({ item, onOpenPath }) {
+function LocalWorkPostPreview({ item, onOpenPath, showImageFolderButton = true }) {
   return (
     <div className="xhsPreview">
       <div className="xhsImageStrip">
@@ -3960,14 +3965,16 @@ function LocalWorkPostPreview({ item, onOpenPath }) {
         ) : (
           <div className="imagePlaceholder">暂无图片</div>
         )}
-        <button
-          type="button"
-          className="secondaryButton openImageFolderButton"
-          onClick={() => onOpenPath?.(item.folderPath)}
-          disabled={!item.folderPath}
-        >
-          打开文件目录
-        </button>
+        {showImageFolderButton && (
+          <button
+            type="button"
+            className="secondaryButton openImageFolderButton"
+            onClick={() => onOpenPath?.(item.folderPath)}
+            disabled={!item.folderPath}
+          >
+            打开文件目录
+          </button>
+        )}
       </div>
       <article className="xhsPostBody">
         <div className="promptTagList">
