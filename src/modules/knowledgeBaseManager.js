@@ -305,7 +305,61 @@ function isMarkdownFile(fileName) {
 
 function compareImportEntries(a, b) {
   if (a.isDirectory() !== b.isDirectory()) return a.isDirectory() ? -1 : 1;
+  const aKey = sortKeyForKnowledgeEntry(a.name);
+  const bKey = sortKeyForKnowledgeEntry(b.name);
+  if (aKey.group !== bKey.group) return aKey.group - bKey.group;
+  if (aKey.order !== bKey.order) return aKey.order - bKey.order;
   return a.name.localeCompare(b.name, 'zh-Hans-CN', { numeric: true });
+}
+
+function sortKeyForKnowledgeEntry(name) {
+  const normalized = cleanTitle(name).replace(/\s+/g, '');
+  if (/^(卷首语|序言|前言|导读)/.test(normalized)) return { group: 0, order: 0 };
+  if (/^(目录|大纲|详细大纲)/.test(normalized)) return { group: 1, order: 0 };
+  const volume = normalized.match(/^第([一二三四五六七八九十百千万零〇两\d]+)[卷章节篇部]/);
+  if (volume) return { group: 2, order: parseOrdinalNumber(volume[1]) };
+  const leadingNumber = normalized.match(/^(\d+)[._、-]?/);
+  if (leadingNumber) return { group: 2, order: Number(leadingNumber[1]) };
+  return { group: 3, order: Number.MAX_SAFE_INTEGER };
+}
+
+function parseOrdinalNumber(value) {
+  if (/^\d+$/.test(value)) return Number(value);
+  const digits = {
+    零: 0,
+    '〇': 0,
+    一: 1,
+    二: 2,
+    两: 2,
+    三: 3,
+    四: 4,
+    五: 5,
+    六: 6,
+    七: 7,
+    八: 8,
+    九: 9
+  };
+  let total = 0;
+  let section = 0;
+  let number = 0;
+  const units = { 十: 10, 百: 100, 千: 1000, 万: 10000 };
+  for (const char of String(value)) {
+    if (Object.prototype.hasOwnProperty.call(digits, char)) {
+      number = digits[char];
+      continue;
+    }
+    const unit = units[char];
+    if (!unit) continue;
+    if (unit === 10000) {
+      section = (section + number) * unit;
+      total += section;
+      section = 0;
+    } else {
+      section += (number || 1) * unit;
+    }
+    number = 0;
+  }
+  return total + section + number;
 }
 
 function cleanTitle(value) {
